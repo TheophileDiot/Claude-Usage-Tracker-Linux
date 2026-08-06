@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.claude-usage-tracker" path="/org/gnome/shell/extensions/claude-usage-tracker/">
+    <key name="refresh-interval" type="i">
+      <default>60</default>
+      <range min="30" max="600"/>
+      <summary>Refresh interval</summary>
+    </key>
+    <key name="display-mode" type="s">
+      <default>'text'</default>
+      <choices>
+        <choice value="text"/>
+        <choice value="bar"/>
+        <choice value="both"/>
+      </choices>
+      <summary>Panel display mode</summary>
+    </key>
+    <key name="percentage-mode" type="s">
+      <default>'used'</default>
+      <choices>
+        <choice value="used"/>
+        <choice value="remaining"/>
+      </choices>
+      <summary>Show used or remaining percentage</summary>
+    </key>
+    <key name="icon-style" type="s">
+      <default>'color'</default>
+      <choices>
+        <choice value="color"/>
+        <choice value="monochrome"/>
+      </choices>
+      <summary>Panel icon style</summary>
+    </key>
+    <key name="show-icon" type="b">
+      <default>true</default>
+      <summary>Show panel icon</summary>
+    </key>
+    <key name="notifications-enabled" type="b">
+      <default>true</default>
+      <summary>Enable usage notifications</summary>
+    </key>
+    <key name="threshold-75" type="b">
+      <default>true</default>
+      <summary>Notify at 75 percent</summary>
+    </key>
+    <key name="threshold-90" type="b">
+      <default>true</default>
+      <summary>Notify at 90 percent</summary>
+    </key>
+    <key name="threshold-95" type="b">
+      <default>true</default>
+      <summary>Notify at 95 percent</summary>
+    </key>
+    <key name="last-session-reset" type="s">
+      <default>''</default>
+      <summary>Last observed session reset identifier</summary>
+    </key>
+    <key name="last-notified-threshold" type="i">
+      <default>0</default>
+      <summary>Highest notified threshold in current session window</summary>
+    </key>
+
+    <!-- Claude Code skin. Mirrors the macOS statusline-config.txt keys. -->
+    <key name="statusline-show-directory" type="b">
+      <default>true</default>
+      <summary>Show directory in the Claude Code skin</summary>
+    </key>
+    <key name="statusline-show-branch" type="b">
+      <default>true</default>
+      <summary>Show git branch in the Claude Code skin</summary>
+    </key>
+    <key name="statusline-show-model" type="b">
+      <default>true</default>
+      <summary>Show model in the Claude Code skin</summary>
+    </key>
+    <key name="statusline-show-profile" type="b">
+      <default>false</default>
+      <summary>Show account profile in the Claude Code skin</summary>
+    </key>
+    <key name="statusline-show-context" type="b">
+      <default>true</default>
+      <summary>Show context window in the Claude Code skin</summary>
+    </key>
+    <key name="statusline-context-as-tokens" type="b">
+      <default>false</default>
+      <summary>Show context as a token count instead of a percentage</summary>
+    </key>
+    <key name="statusline-show-usage" type="b">
+      <default>true</default>
+      <summary>Show session usage in the Claude Code skin</summary>
+    </key>
+    <key name="statusline-show-progress-bar" type="b">
+      <default>true</default>
+      <summary>Show the session progress bar</summary>
+    </key>
+    <key name="statusline-show-pace-marker" type="b">
+      <default>true</default>
+      <summary>Show the session pace marker</summary>
+    </key>
+    <key name="statusline-pace-marker-step-colors" type="b">
+      <default>true</default>
+      <summary>Colour the pace marker by projected usage</summary>
+    </key>
+    <key name="statusline-show-reset-time" type="b">
+      <default>true</default>
+      <summary>Show the session reset time</summary>
+    </key>
+    <key name="statusline-use-24-hour-time" type="b">
+      <default>false</default>
+      <summary>Use 24-hour reset times</summary>
+    </key>
+    <key name="statusline-show-context-label" type="b">
+      <default>true</default>
+      <summary>Show the Ctx: label</summary>
+    </key>
+    <key name="statusline-show-usage-label" type="b">
+      <default>true</default>
+      <summary>Show the Usage: label</summary>
+    </key>
+    <key name="statusline-show-reset-label" type="b">
+      <default>true</default>
+      <summary>Show the Reset: label</summary>
+    </key>
+    <key name="statusline-show-weekly" type="b">
+      <default>false</default>
+      <summary>Show weekly usage in the Claude Code skin</summary>
+    </key>
+    <key name="statusline-show-weekly-bar" type="b">
+      <default>true</default>
+      <summary>Show the weekly progress bar</summary>
+    </key>
+    <key name="statusline-show-weekly-pace-marker" type="b">
+      <default>true</default>
+      <summary>Show the weekly pace marker</summary>
+    </key>
+    <key name="statusline-show-weekly-reset-time" type="b">
+      <default>true</default>
+      <summary>Show the weekly reset time</summary>
+    </key>
+    <key name="statusline-show-weekly-label" type="b">
+      <default>true</default>
+      <summary>Show the Weekly: label</summary>
+    </key>
+    <key name="statusline-show-extra-usage" type="b">
+      <default>false</default>
+      <summary>Show extra usage cost in the Claude Code skin</summary>
+    </key>
+    <key name="statusline-line-break" type="s">
+      <default>'none'</default>
+      <choices>
+        <choice value="none"/>
+        <choice value="context"/>
+        <choice value="usage"/>
+        <choice value="weekly"/>
+      </choices>
+      <summary>Segment that starts a second line</summary>
+    </key>
+    <key name="statusline-color-mode" type="s">
+      <default>'colored'</default>
+      <choices>
+        <choice value="colored"/>
+        <choice value="monochrome"/>
+        <choice value="singleColor"/>
+        <choice value="perElement"/>
+      </choices>
+      <summary>Claude Code skin colour mode</summary>
+    </key>
+    <key name="statusline-single-color" type="s">
+      <default>'#00BFFF'</default>
+      <summary>Single colour for every skin element</summary>
+    </key>
+    <key name="statusline-element-color-dir" type="s">
+      <default>'#0000EE'</default>
+      <summary>Per-element directory colour</summary>
+    </key>
+    <key name="statusline-element-color-branch" type="s">
+      <default>'#00BB00'</default>
+      <summary>Per-element branch colour</summary>
+    </key>
+    <key name="statusline-element-color-model" type="s">
+      <default>'#BBBB00'</default>
+      <summary>Per-element model colour</summary>
+    </key>
+    <key name="statusline-element-color-profile" type="s">
+      <default>'#BB00BB'</default>
+      <summary>Per-element profile colour</summary>
+    </key>
+    <key name="statusline-element-color-context" type="s">
+      <default>'#00BBBB'</default>
+      <summary>Per-element context colour</summary>
+    </key>
+    <key name="statusline-element-color-separator" type="s">
+      <default>'#808080'</default>
+      <summary>Per-element separator colour</summary>
+    </key>
+    <key name="statusline-element-color-usage" type="s">
+      <default>''</default>
+      <summary>Fixed session usage colour; empty keeps the gradient</summary>
+    </key>
+    <key name="statusline-element-color-pace" type="s">
+      <default>''</default>
+      <summary>Fixed pace marker colour; empty keeps the six tiers</summary>
+    </key>
+    <key name="statusline-element-color-weekly" type="s">
+      <default>''</default>
+      <summary>Fixed weekly usage colour; empty keeps the gradient</summary>
+    </key>
+    <key name="statusline-element-color-extra" type="s">
+      <default>''</default>
+      <summary>Fixed extra usage colour; empty keeps the gradient</summary>
+    </key>
+  </schema>
+</schemalist>

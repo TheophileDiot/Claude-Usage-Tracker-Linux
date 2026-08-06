@@ -1,0 +1,13 @@
+Claude Usage Tracker for GNOME
+
+Derived from:
+
+- Claude Usage Tracker by its contributors
+  https://github.com/hamed-elfayome/Claude-Usage-Tracker
+  Source behavior, product name, and icon are used under the MIT License.
+
+- Claude Code Usage GNOME extension by Baptiste-Pasquier
+  https://github.com/Haletran/claude-usage-extension
+  GNOME Shell integration patterns are used under the MIT License.
+
+This project is unofficial and is not affiliated with or endorsed by Anthropic.

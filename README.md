@@ -1,0 +1,104 @@
+# Claude Usage Tracker for Linux
+
+A Claude Code terminal skin plus GNOME Shell 46 top-panel tracker. The skin reproduces the macOS tracker's statusline — directory, branch, model, profile, context, and a session usage bar with a pace marker and reset time — and the panel adds active model-specific limits, notifications, and a local 24-hour chart.
+
+```
+my-project │ ⎇ main │ Opus 5 │ Ctx: 23% │ Usage: 34% ▓▓▓░░░░┃░░ → Reset: 11:48 AM
+```
+
+The `┃` is the pace marker: it sits at the elapsed position in the window, so the gap between it and the filled bar is the burn rate. Its color runs across six tiers of projected end-of-window usage — comfortable, on track, warming, pressing, critical, runaway.
+
+![Claude Usage Tracker icon](claude-usage.svg)
+
+## Requirements
+
+- GNOME Shell 46
+- Claude Code signed in with `claude auth login`
+- Node.js 18 or newer for the Claude Code statusline
+- GJS, `glib-compile-schemas`, and `gnome-extensions`
+
+## Build
+
+```sh
+make test
+make pack
+```
+
+The package is written to `dist/claude-usage-tracker@bunkerity.local.shell-extension.zip`.
+
+## Install the GNOME extension
+
+Installation changes the running desktop and is intentionally separate from the build:
+
+```sh
+gnome-extensions install --force dist/claude-usage-tracker@bunkerity.local.shell-extension.zip
+gnome-extensions enable claude-usage-tracker@bunkerity.local
+```
+
+Restart GNOME Shell or sign out and back in if the new extension is not listed. The UUID is different from `claude-code-usage@haletran.com`, so the existing tracker can remain installed until this one is verified; disable it only when ready:
+
+```sh
+gnome-extensions disable claude-code-usage@haletran.com
+```
+
+Open settings with:
+
+```sh
+gnome-extensions prefs claude-usage-tracker@bunkerity.local
+```
+
+## Enable the Claude Code skin
+
+Open preferences, go to the **Claude Code** page, and press **Install**. That writes the `statusLine` entry into `~/.claude/settings.json`, keeping a timestamped backup of the previous file. **Remove** takes it out again and leaves the rest of the file untouched.
+
+To wire it up by hand instead:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "node \"$HOME/.local/share/gnome-shell/extensions/claude-usage-tracker@bunkerity.local/statusline.js\""
+  }
+}
+```
+
+Claude Code sends context and subscription rate-limit data directly to the statusline script; it does not make an API request or read credentials. The skin appears on the next Claude interaction or in a new session. Rate limits appear after Claude receives its first API response, and the panel's cache covers the gap before then.
+
+Two optional `statusLine` fields are worth knowing about: `padding` adds horizontal spacing, and `refreshInterval` re-runs the command every N seconds so reset times and pace markers stay current while the session is idle.
+
+If the Caveman statusline badge is installed at `~/.claude/hooks/caveman-statusline.sh`, it is appended as a final segment.
+
+### Configuring the skin
+
+The Claude Code preferences page mirrors the macOS app's tab, with a live preview rendered by the skin itself:
+
+- **Components** — directory, git branch, model, profile, context (as a percentage or a token count).
+- **Session usage** — progress bar, pace marker, pace marker colors, reset time.
+- **Weekly usage** — its own bar, pace marker, and reset time; plus extra-usage cost.
+- **Labels** — the `Ctx:`, `Usage:`, `Reset:`, and `Weekly:` prefixes, and 24-hour reset times.
+- **Colours** — Multi-Color, Greyscale, Single Color, or Per Element with a color for each segment.
+- **Layout** — a line break before context, usage, or weekly. macOS renders a single line, which is the default.
+
+Settings are projected into `~/.claude/statusline-config.txt` using the same key names and format the macOS app writes, so that file stays readable and hand-editable. Preferences overwrite it. `NO_COLOR=1` disables ANSI decoration regardless of the color mode.
+
+Profile is off by default, matching the macOS app — enable it only if you want your account or organisation name on screen.
+
+## Privacy
+
+The GNOME extension reads the existing Claude Code OAuth token from `$CLAUDE_CONFIG_DIR` or `~/.claude` and holds it only in memory for the usage request. The statusline receives session JSON on stdin and never reads the token. Neither component writes credentials, makes inference requests, or sends telemetry.
+
+Unlike the macOS app, no session key is ever written into the statusline script. macOS injects one into `~/.claude/fetch-claude-usage.swift` so the script can call the API itself; here Claude Code supplies the rate limits directly, so there is nothing to inject.
+
+Files written, all `0600`:
+
+- `$XDG_STATE_HOME/claude-usage-tracker/history.json` — seven days of percentages for the chart. Removing it clears the chart.
+- `~/.claude/statusline-config.txt` — skin settings, projected from preferences.
+- `~/.claude/.statusline-usage-cache` — last panel refresh, so the skin can show extra-usage cost and cover the start of a session.
+
+## Troubleshooting
+
+- “Credentials not found/expired”: run `claude auth login`.
+- Cached values remain visible during network or service failures.
+- This first release targets GNOME Shell 46 only.
+
+This project is unofficial and is not affiliated with or endorsed by Anthropic. See [NOTICE](NOTICE) for upstream attribution.

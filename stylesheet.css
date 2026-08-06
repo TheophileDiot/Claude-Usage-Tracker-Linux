@@ -1,0 +1,275 @@
+.cut-root-item {
+    padding: 0;
+}
+
+.cut-popover {
+    width: 310px;
+    color: #f3f3f3;
+    background-color: #111412;
+    border-radius: 15px;
+}
+
+.cut-header {
+    padding: 11px 14px 10px;
+}
+
+.cut-identity {
+    spacing: 3px;
+}
+
+.cut-account {
+    color: #f4f4f4;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.cut-state-row {
+    spacing: 6px;
+}
+
+.cut-state-dot {
+    width: 7px;
+    height: 7px;
+    margin-top: 4px;
+    border-radius: 999px;
+}
+
+.cut-state-dot.state-loading {
+    background-color: #f28c28;
+}
+
+.cut-state-dot.state-ready {
+    background-color: #65d879;
+}
+
+.cut-state-dot.state-stale {
+    background-color: #ffad42;
+}
+
+.cut-state-label,
+.cut-card-subtitle,
+.cut-reset,
+.cut-history-caption {
+    color: #a8aca9;
+}
+
+.cut-state-label {
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.cut-header-actions {
+    spacing: 2px;
+}
+
+.cut-icon-button {
+    padding: 6px;
+    color: #b8bcba;
+    border-radius: 6px;
+}
+
+.cut-icon-button:hover,
+.cut-icon-button:focus {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.cut-icon-button:active {
+    background-color: rgba(255, 255, 255, 0.16);
+}
+
+.cut-separator {
+    height: 1px;
+    margin: 0 14px;
+    background-color: rgba(255, 255, 255, 0.11);
+}
+
+.cut-error {
+    margin: 9px 14px 0;
+    padding: 8px 10px;
+    spacing: 8px;
+    color: #ffd4ad;
+    background-color: rgba(242, 140, 40, 0.16);
+    border-radius: 9px;
+}
+
+.cut-error-label {
+    width: 244px;
+    color: #ffd4ad;
+    font-size: 10px;
+    line-height: 1.25;
+}
+
+.cut-scroll {
+    max-height: 560px;
+}
+
+.cut-dashboard {
+    padding: 9px 14px 12px;
+    spacing: 9px;
+}
+
+.cut-metrics {
+    spacing: 8px;
+}
+
+.cut-card,
+.cut-history-card {
+    padding: 11px 12px;
+    spacing: 6px;
+    background-color: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 14px;
+}
+
+.cut-card-header,
+.cut-title-row,
+.cut-history-heading {
+    spacing: 6px;
+}
+
+.cut-card-title,
+.cut-history-title {
+    color: #f3f3f3;
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.cut-card-subtitle {
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.cut-tag {
+    padding: 1px 6px;
+    color: #aeb2af;
+    background-color: rgba(255, 255, 255, 0.09);
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 600;
+}
+
+.cut-card-value {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.cut-progress-track {
+    width: 250px;
+    height: 5px;
+    margin-top: 1px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.cut-progress-fill {
+    height: 5px;
+    border-radius: 3px;
+}
+
+.cut-reset {
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.cut-card-value.usage-safe,
+.cut-panel-label.usage-safe {
+    color: #65d879;
+}
+
+.cut-card-value.usage-moderate,
+.cut-panel-label.usage-moderate {
+    color: #ffad42;
+}
+
+.cut-card-value.usage-critical,
+.cut-panel-label.usage-critical {
+    color: #ff6267;
+}
+
+.cut-progress-fill.usage-safe,
+.cut-panel-progress-fill.usage-safe,
+.cut-history-bar.usage-safe {
+    background-color: #65d879;
+}
+
+.cut-progress-fill.usage-moderate,
+.cut-panel-progress-fill.usage-moderate,
+.cut-history-bar.usage-moderate {
+    background-color: #ffad42;
+}
+
+.cut-progress-fill.usage-critical,
+.cut-panel-progress-fill.usage-critical,
+.cut-history-bar.usage-critical {
+    background-color: #ff6267;
+}
+
+.cut-history-card {
+    spacing: 8px;
+}
+
+.cut-history-title {
+    font-size: 13px;
+}
+
+.cut-history-caption,
+.cut-history-label,
+.cut-history-value {
+    font-size: 10px;
+    font-weight: 550;
+}
+
+.cut-history-label {
+    color: #c7cac8;
+}
+
+.cut-history-value {
+    color: #f3f3f3;
+}
+
+.cut-history-row {
+    spacing: 4px;
+}
+
+.cut-history-bars {
+    spacing: 2px;
+}
+
+.cut-history-slot {
+    width: 8px;
+    height: 22px;
+}
+
+.cut-history-bar {
+    width: 6px;
+    border-radius: 2px 2px 0 0;
+}
+
+.cut-history-bar.history-empty {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+.cut-panel-icon {
+    margin-right: 5px;
+}
+
+.cut-panel-label {
+    color: #f3f3f3;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.cut-panel-progress {
+    width: 46px;
+    height: 9px;
+    margin: 0 4px;
+    background-color: rgba(255, 255, 255, 0.18);
+    border-radius: 5px;
+}
+
+.cut-panel-progress-fill {
+    height: 9px;
+    background-color: #f3f3f3;
+    border-radius: 5px;
+}
