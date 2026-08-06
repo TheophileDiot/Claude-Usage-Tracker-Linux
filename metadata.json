@@ -1,6 +1,6 @@
 {
   "name": "Claude Usage Tracker for Linux",
-  "description": "Unofficial GNOME extension for tracking Claude Code context, session, and weekly usage in the top panel.",
+  "description": "Unofficial GNOME extension for tracking Claude Code context, session, and weekly usage in the top panel.\n\nThis is a Linux port derived from two MIT-licensed upstream projects: the macOS Claude Usage Tracker (https://github.com/hamed-elfayome/Claude-Usage-Tracker), which the statusline behaviour, name, icon, and visual direction come from, and the Claude Code Usage GNOME extension by Baptiste-Pasquier (https://github.com/Haletran/claude-usage-extension), which the GNOME Shell integration is built on. Full attribution is in the bundled NOTICE and LICENSE files.\n\nNot affiliated with or endorsed by Anthropic. Usage is read from Claude Code's existing credential file; no token is ever stored by this extension.",
   "uuid": "claude-usage-tracker@theophilediot.github.io",
   "settings-schema": "org.gnome.shell.extensions.claude-usage-tracker",
   "url": "https://github.com/TheophileDiot/Claude-Usage-Tracker-Linux",

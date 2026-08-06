@@ -11,6 +11,15 @@
  * - Usage comes from the `rate_limits` block Claude Code already puts on stdin,
  *   so no credential is injected into this file and no request is made.
  * - `NO_COLOR` suppresses reset sequences too, as the NO_COLOR spec requires.
+ *
+ * Reviewer note: this is the one non-GJS file in the extension, and it cannot
+ * be GJS. Claude Code executes the configured `statusLine.command` itself, in
+ * its own Node runtime, outside GNOME Shell — the extension never interprets
+ * this file. It is plain readable source, ships under the same MIT license as
+ * the rest of the extension (see LICENSE), installs no packages, makes no
+ * network request, and writes nothing: it reads stdin plus the extension's own
+ * config and cache files, and shells out only to `git branch --show-current`
+ * for the branch segment.
  */
 
 'use strict';

@@ -174,7 +174,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         const settings = this.getSettings();
         window.set_default_size(640, 760);
         this._buildPanelPage(window, settings);
-        this._buildSkinPage(window, settings);
+        const colorModeId = this._buildSkinPage(window, settings);
 
         // The skin reads a file, not GSettings, so every change is projected out.
         const changedId = settings.connect('changed', (_settings, key) => {
@@ -183,7 +183,12 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
                 this._refreshPreview();
             }
         });
-        window.connect('close-request', () => settings.disconnect(changedId));
+        window.connect('close-request', () => {
+            settings.disconnect(changedId);
+            settings.disconnect(colorModeId);
+            this._stopPreview();
+            this._preview = null;
+        });
         this._writeSkinConfig(settings);
         this._refreshPreview();
     }
@@ -277,6 +282,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         }));
     }
 
+    /** Returns the settings handler id the caller has to disconnect. */
     _buildSkinPage(window, settings) {
         const page = new Adw.PreferencesPage({
             title: 'Claude Code',
@@ -356,7 +362,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         labels.add(switchRow(settings, 'statusline-use-24-hour-time', '24-hour time',
             'Show reset times as 20:00 rather than 08:00 PM'));
 
-        this._buildColorGroup(page, settings);
+        return this._buildColorGroup(page, settings);
     }
 
     _buildIntegrationGroup(page, window) {
@@ -493,14 +499,27 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
             single.sensitive = mode === 'singleColor';
             perElement.sensitive = mode === 'perElement';
         };
-        settings.connect('changed::statusline-color-mode', sync);
+        const syncId = settings.connect('changed::statusline-color-mode', sync);
         sync();
+        return syncId;
+    }
+
+    /** Drop any in-flight render so no preview process outlives the window. */
+    _stopPreview() {
+        this._previewCancellable?.cancel();
+        this._previewCancellable = null;
+        this._previewProcess?.force_exit();
+        this._previewProcess = null;
     }
 
     /** Run the real skin against a sample payload so the preview cannot drift. */
     _refreshPreview() {
         if (!this._preview)
             return;
+
+        // One render at a time: a burst of setting changes must not leave
+        // several node processes racing to write the same label.
+        this._stopPreview();
 
         const nowSeconds = Math.floor(GLib.get_real_time() / 1_000_000);
         const sample = JSON.stringify({
@@ -522,23 +541,34 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         });
 
         try {
+            const cancellable = new Gio.Cancellable();
             const process = Gio.Subprocess.new(
                 ['node', GLib.build_filenamev([this.path, 'statusline.js'])],
                 Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE |
                     Gio.SubprocessFlags.STDERR_SILENCE
             );
-            process.communicate_utf8_async(sample, null, (source, result) => {
+            this._previewCancellable = cancellable;
+            this._previewProcess = process;
+            process.communicate_utf8_async(sample, cancellable, (source, result) => {
+                if (this._previewProcess === process) {
+                    this._previewCancellable = null;
+                    this._previewProcess = null;
+                }
                 try {
                     const [, output] = source.communicate_utf8_finish(result);
+                    if (cancellable.is_cancelled() || !this._preview)
+                        return;
                     this._preview.set_markup(
                         ansiToMarkup((output || '').replace(/\n$/, '')) ||
                         '<i>No output</i>'
                     );
                 } catch (error) {
-                    this._preview.set_text(`Preview failed: ${error.message}`);
+                    if (!cancellable.is_cancelled() && this._preview)
+                        this._preview.set_text(`Preview failed: ${error.message}`);
                 }
             });
         } catch (_error) {
+            this._stopPreview();
             this._preview.set_text('Preview needs Node.js 18 or newer on PATH.');
         }
     }

@@ -615,14 +615,22 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
 
     destroy() {
         this._destroyed = true;
-        if (this._timerId)
+        if (this._timerId) {
             GLib.source_remove(this._timerId);
-        if (this._historyWriteId)
+            this._timerId = 0;
+        }
+        if (this._historyWriteId) {
             GLib.source_remove(this._historyWriteId);
+            this._historyWriteId = 0;
+        }
         this._cancellable?.cancel();
+        this._cancellable = null;
         this._session.abort();
-        if (this._settingsChangedId)
+        this._session = null;
+        if (this._settingsChangedId) {
             this._settings.disconnect(this._settingsChangedId);
+            this._settingsChangedId = 0;
+        }
         super.destroy();
     }
 });
