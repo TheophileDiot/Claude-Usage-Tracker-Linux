@@ -1,0 +1,15 @@
+version: 2
+
+updates:
+  # GHA — actions are pinned to full SHAs, so this is what keeps them current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    assignees:
+      - "TheophileDiot"
+    commit-message:
+      prefix: "deps/gha"
