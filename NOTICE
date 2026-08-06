@@ -1,13 +1,17 @@
-Claude Usage Tracker for GNOME
+Claude Usage Tracker for Linux
+Copyright (c) 2026 Théophile Diot
 
-Derived from:
+This project is an unofficial Linux port derived from:
 
 - Claude Usage Tracker by its contributors
   https://github.com/hamed-elfayome/Claude-Usage-Tracker
-  Source behavior, product name, and icon are used under the MIT License.
+  Statusline behavior, product name, icon, and visual direction are used under
+  the MIT License.
 
 - Claude Code Usage GNOME extension by Baptiste-Pasquier
   https://github.com/Haletran/claude-usage-extension
-  GNOME Shell integration patterns are used under the MIT License.
+  GNOME Shell integration foundations are used under the MIT License.
+
+Upstream copyright notices and MIT permission terms are reproduced in LICENSE.
 
 This project is unofficial and is not affiliated with or endorsed by Anthropic.

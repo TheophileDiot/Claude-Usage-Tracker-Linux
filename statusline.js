@@ -340,23 +340,6 @@ function readCache(now = Date.now(), directory = claudeDirectory()) {
     return Number.isFinite(stamp) && now - stamp < CACHE_MAX_AGE_MS ? cache : {};
 }
 
-function companionBadge() {
-    const script = path.join(claudeDirectory(), 'hooks', 'caveman-statusline.sh');
-    try {
-        if (!fs.lstatSync(script).isFile())
-            return '';
-        const result = spawnSync('/bin/bash', [script], {
-            encoding: 'utf8',
-            stdio: ['ignore', 'pipe', 'ignore'],
-            timeout: 100,
-            maxBuffer: 2048,
-        });
-        return result.status === 0 ? result.stdout.replace(/[\r\n]/g, ' ').trim() : '';
-    } catch (_error) {
-        return '';
-    }
-}
-
 function renderStatusline(data, options = {}) {
     const colors = options.colors ?? !process.env.NO_COLOR;
     const now = options.now ?? Date.now();
@@ -486,12 +469,6 @@ function renderStatusline(data, options = {}) {
         }
     }
 
-    const badge = colors
-        ? options.badge || ''
-        : String(options.badge || '').replace(/\x1b\[[0-9;]*m/g, '');
-    if (badge)
-        push('badge', badge);
-
     // A break before the named segment splits the row there; 'none' is the
     // single line the mac app renders.
     return segments.reduce((rows, segment, index) => {
@@ -513,7 +490,6 @@ function main() {
                 data?.workspace?.git_worktree,
             profile: readProfile(),
             cache: readCache(),
-            badge: companionBadge(),
         })}\n`);
     } catch (_error) {
         // A statusline must never interfere with the Claude session.

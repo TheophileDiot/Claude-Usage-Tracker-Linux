@@ -1,6 +1,6 @@
 # Claude Usage Tracker for Linux
 
-A Claude Code terminal skin plus GNOME Shell top-panel tracker. The skin reproduces the macOS tracker's statusline — directory, branch, model, profile, context, and a session usage bar with a pace marker and reset time — and the panel adds active model-specific limits, notifications, and a local 24-hour chart.
+An unofficial Linux port of [Claude Usage Tracker](https://github.com/hamed-elfayome/Claude-Usage-Tracker) for macOS, combining its Claude Code statusline and visual direction with a GNOME Shell foundation adapted from [Claude Code Usage](https://github.com/Haletran/claude-usage-extension). It adds active model-specific limits, notifications, and a local 24-hour chart.
 
 ```
 my-project │ ⎇ main │ Opus 5 │ Ctx: 23% │ Usage: 34% ▓▓▓░░░░┃░░ → Reset: 11:48 AM
@@ -65,8 +65,6 @@ To wire it up by hand instead:
 Claude Code sends context and subscription rate-limit data directly to the statusline script; it does not make an API request or read credentials. The skin appears on the next Claude interaction or in a new session. Rate limits appear after Claude receives its first API response, and the panel's cache covers the gap before then.
 
 Two optional `statusLine` fields are worth knowing about: `padding` adds horizontal spacing, and `refreshInterval` re-runs the command every N seconds so reset times and pace markers stay current while the session is idle.
-
-If the Caveman statusline badge is installed at `~/.claude/hooks/caveman-statusline.sh`, it is appended as a final segment.
 
 ### Configuring the skin
 

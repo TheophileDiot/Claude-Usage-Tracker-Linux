@@ -41,9 +41,8 @@ Retain the Claude Usage Tracker name, orange pulse icon, and compact macOS quota
 
 ## Evidence on Hand
 
-- macOS source and visual reference: `hamed-elfayome/Claude-Usage-Tracker`.
-- Proven GNOME 46 extension base: locally installed `claude-code-usage@haletran.com`.
-- Live Claude OAuth usage response confirmed on this system without exposing credentials or usage values.
+- macOS source and visual reference: <https://github.com/hamed-elfayome/Claude-Usage-Tracker>.
+- GNOME Shell foundation: <https://github.com/Haletran/claude-usage-extension>.
 
 ## Product Principles
 
