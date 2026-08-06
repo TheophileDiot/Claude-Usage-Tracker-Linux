@@ -95,7 +95,7 @@ function ansiToMarkup(text) {
     return markup;
 }
 
-function switchRow(settings, key, title, subtitle) {
+function switchRow(settings, key, title, subtitle = '') {
     const row = new Adw.SwitchRow({title, subtitle});
     settings.bind(key, row, 'active', Gio.SettingsBindFlags.DEFAULT);
     return row;
