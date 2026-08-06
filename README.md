@@ -17,34 +17,40 @@ The `┃` is the pace marker: it sits at the elapsed position in the window, so 
 - Node.js 18 or newer for the Claude Code statusline
 - GJS, `glib-compile-schemas`, and `gnome-extensions`
 
-## Build
+## Install From Source
 
-```sh
-make test
-make pack
-```
+1. Clone the repository and build the package. `make pack` runs the tests first.
 
-The package is written to `dist/claude-usage-tracker@theophilediot.github.io.shell-extension.zip`.
+   ```bash
+   git clone https://github.com/TheophileDiot/Claude-Usage-Tracker-Linux.git
+   cd Claude-Usage-Tracker-Linux
+   make pack
+   ```
 
-## Install the GNOME extension
+   The archive is written to `dist/claude-usage-tracker@theophilediot.github.io.shell-extension.zip`.
 
-Installation changes the running desktop and is intentionally separate from the build:
+2. Install the extension.
 
-```sh
-gnome-extensions install --force dist/claude-usage-tracker@theophilediot.github.io.shell-extension.zip
-gnome-extensions enable claude-usage-tracker@theophilediot.github.io
-```
+   ```bash
+   gnome-extensions install --force dist/claude-usage-tracker@theophilediot.github.io.shell-extension.zip
+   ```
 
-Restart GNOME Shell or sign out and back in if the new extension is not listed. The UUID is different from `claude-code-usage@haletran.com`, so the existing tracker can remain installed until this one is verified; disable it only when ready:
+3. Restart GNOME Shell so it discovers the extension.
 
-```sh
+   - X11: press `Alt` + `F2`, type `r`, then press `Enter`.
+   - Wayland: log out and back in.
+
+4. Enable the extension and open its settings.
+
+   ```bash
+   gnome-extensions enable claude-usage-tracker@theophilediot.github.io
+   gnome-extensions prefs claude-usage-tracker@theophilediot.github.io
+   ```
+
+The UUID differs from `claude-code-usage@haletran.com`, so both extensions can remain installed while you verify this port. Disable the previous extension only when ready:
+
+```bash
 gnome-extensions disable claude-code-usage@haletran.com
-```
-
-Open settings with:
-
-```sh
-gnome-extensions prefs claude-usage-tracker@theophilediot.github.io
 ```
 
 ## Enable the Claude Code skin
