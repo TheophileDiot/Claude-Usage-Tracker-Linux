@@ -1,9 +1,8 @@
 {
-  "name": "Claude Usage Tracker",
-  "description": "Track Claude context, session, and weekly usage in Claude Code and the GNOME panel.",
+  "name": "Claude Usage Tracker for Linux",
+  "description": "Unofficial GNOME extension for tracking Claude Code context, session, and weekly usage in the top panel.",
   "uuid": "claude-usage-tracker@theophilediot.github.io",
   "settings-schema": "org.gnome.shell.extensions.claude-usage-tracker",
   "url": "https://github.com/TheophileDiot/Claude-Usage-Tracker-Linux",
-  "shell-version": ["46", "47", "48"],
-  "version": 1
+  "shell-version": ["46", "47", "48", "49", "50"]
 }

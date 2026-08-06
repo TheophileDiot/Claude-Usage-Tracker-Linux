@@ -12,7 +12,7 @@ The `┃` is the pace marker: it sits at the elapsed position in the window, so 
 
 ## Requirements
 
-- GNOME Shell 46, 47, or 48 (developed and tested on 46)
+- GNOME Shell 46 through 50 (developed and tested on 46)
 - Claude Code signed in with `claude auth login`
 - Node.js 18 or newer for the Claude Code statusline
 - GJS, `glib-compile-schemas`, and `gnome-extensions`
@@ -103,8 +103,8 @@ Files written, all `0600`:
 
 - “Credentials not found/expired”: run `claude auth login`.
 - Cached values remain visible during network or service failures.
-- Developed and tested on GNOME Shell 46. It declares 46-48 because no breaking
-  extension API it uses changed in 47 or 48, but 47 and 48 are untested; please
-  open an issue if something misbehaves there.
+- Developed and tested on GNOME Shell 46. It declares 46-50 because no breaking
+  extension API it uses changed across those releases, but 47-50 are untested;
+  please open an issue if something misbehaves there.
 
 This project is unofficial and is not affiliated with or endorsed by Anthropic. See [NOTICE](NOTICE) for upstream attribution.
