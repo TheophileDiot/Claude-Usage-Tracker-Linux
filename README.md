@@ -1,6 +1,6 @@
 # Claude Usage Tracker for Linux
 
-A Claude Code terminal skin plus GNOME Shell 46 top-panel tracker. The skin reproduces the macOS tracker's statusline — directory, branch, model, profile, context, and a session usage bar with a pace marker and reset time — and the panel adds active model-specific limits, notifications, and a local 24-hour chart.
+A Claude Code terminal skin plus GNOME Shell top-panel tracker. The skin reproduces the macOS tracker's statusline — directory, branch, model, profile, context, and a session usage bar with a pace marker and reset time — and the panel adds active model-specific limits, notifications, and a local 24-hour chart.
 
 ```
 my-project │ ⎇ main │ Opus 5 │ Ctx: 23% │ Usage: 34% ▓▓▓░░░░┃░░ → Reset: 11:48 AM
@@ -12,7 +12,7 @@ The `┃` is the pace marker: it sits at the elapsed position in the window, so 
 
 ## Requirements
 
-- GNOME Shell 46
+- GNOME Shell 46, 47, or 48 (developed and tested on 46)
 - Claude Code signed in with `claude auth login`
 - Node.js 18 or newer for the Claude Code statusline
 - GJS, `glib-compile-schemas`, and `gnome-extensions`
@@ -24,15 +24,15 @@ make test
 make pack
 ```
 
-The package is written to `dist/claude-usage-tracker@bunkerity.local.shell-extension.zip`.
+The package is written to `dist/claude-usage-tracker@theophilediot.github.io.shell-extension.zip`.
 
 ## Install the GNOME extension
 
 Installation changes the running desktop and is intentionally separate from the build:
 
 ```sh
-gnome-extensions install --force dist/claude-usage-tracker@bunkerity.local.shell-extension.zip
-gnome-extensions enable claude-usage-tracker@bunkerity.local
+gnome-extensions install --force dist/claude-usage-tracker@theophilediot.github.io.shell-extension.zip
+gnome-extensions enable claude-usage-tracker@theophilediot.github.io
 ```
 
 Restart GNOME Shell or sign out and back in if the new extension is not listed. The UUID is different from `claude-code-usage@haletran.com`, so the existing tracker can remain installed until this one is verified; disable it only when ready:
@@ -44,7 +44,7 @@ gnome-extensions disable claude-code-usage@haletran.com
 Open settings with:
 
 ```sh
-gnome-extensions prefs claude-usage-tracker@bunkerity.local
+gnome-extensions prefs claude-usage-tracker@theophilediot.github.io
 ```
 
 ## Enable the Claude Code skin
@@ -57,7 +57,7 @@ To wire it up by hand instead:
 {
   "statusLine": {
     "type": "command",
-    "command": "node \"$HOME/.local/share/gnome-shell/extensions/claude-usage-tracker@bunkerity.local/statusline.js\""
+    "command": "node \"$HOME/.local/share/gnome-shell/extensions/claude-usage-tracker@theophilediot.github.io/statusline.js\""
   }
 }
 ```
@@ -99,6 +99,8 @@ Files written, all `0600`:
 
 - “Credentials not found/expired”: run `claude auth login`.
 - Cached values remain visible during network or service failures.
-- This first release targets GNOME Shell 46 only.
+- Developed and tested on GNOME Shell 46. It declares 46-48 because no breaking
+  extension API it uses changed in 47 or 48, but 47 and 48 are untested; please
+  open an issue if something misbehaves there.
 
 This project is unofficial and is not affiliated with or endorsed by Anthropic. See [NOTICE](NOTICE) for upstream attribution.

@@ -1,0 +1,31 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # gjs runs the GNOME-side tests; libglib2.0-bin provides
+      # glib-compile-schemas. Packing needs the full gnome-shell package, so it
+      # stays a local step rather than dragging that tree into CI.
+      - name: Install GJS and GLib schema tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gjs libglib2.0-bin
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run tests
+        run: make test

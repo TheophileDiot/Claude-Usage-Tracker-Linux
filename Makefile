@@ -1,4 +1,4 @@
-UUID := claude-usage-tracker@bunkerity.local
+UUID := claude-usage-tracker@theophilediot.github.io
 
 .PHONY: test pack
 

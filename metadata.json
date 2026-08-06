@@ -1,8 +1,9 @@
 {
   "name": "Claude Usage Tracker",
   "description": "Track Claude context, session, and weekly usage in Claude Code and the GNOME panel.",
-  "uuid": "claude-usage-tracker@bunkerity.local",
+  "uuid": "claude-usage-tracker@theophilediot.github.io",
   "settings-schema": "org.gnome.shell.extensions.claude-usage-tracker",
-  "shell-version": ["46"],
+  "url": "https://github.com/TheophileDiot/Claude-Usage-Tracker-Linux",
+  "shell-version": ["46", "47", "48"],
   "version": 1
 }
