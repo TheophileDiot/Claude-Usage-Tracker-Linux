@@ -104,9 +104,17 @@ export function renderConfig(settings, profileName = readAccountLabel()) {
     return `${lines.join('\n')}\n`;
 }
 
+/**
+ * Project the settings into the skin's config file, but only into a Claude
+ * directory that already exists: opening prefs must not create `~/.claude` on a
+ * machine without Claude Code. A missing file is not a failure — the skin's own
+ * DEFAULTS carry the same values, so it renders identically until Claude Code
+ * shows up and the next write lands.
+ */
 export function writeConfig(settings, profileName = readAccountLabel()) {
     const directory = claudeDirectory();
-    GLib.mkdir_with_parents(directory, 0o700);
+    if (!GLib.file_test(directory, GLib.FileTest.IS_DIR))
+        return;
     const path = GLib.build_filenamev([directory, CONFIG_FILE]);
     GLib.file_set_contents(path, renderConfig(settings, profileName));
     GLib.chmod(path, 0o600);

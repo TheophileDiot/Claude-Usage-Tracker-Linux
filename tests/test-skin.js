@@ -1,7 +1,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
-import {SKIN_KEYS, renderConfig, statuslineCommand} from '../skin.js';
+import {SKIN_KEYS, renderConfig, statuslineCommand, writeConfig} from '../skin.js';
 
 const SCHEMA_ID = 'org.gnome.shell.extensions.claude-usage-tracker';
 
@@ -84,5 +84,22 @@ settings.set_string('statusline-single-color', '#00BFFF');
 
 assert(statuslineCommand('/opt/ext') === 'node "/opt/ext/statusline.js"',
     'statusline command quotes the script path');
+
+// The config write must never conjure a Claude directory into existence.
+const tmp = GLib.Dir.make_tmp('claude-usage-tracker-XXXXXX');
+const missing = GLib.build_filenamev([tmp, 'missing']);
+GLib.setenv('CLAUDE_CONFIG_DIR', missing, true);
+writeConfig(settings, 'Acme Inc');
+assert(!GLib.file_test(missing, GLib.FileTest.EXISTS),
+    'writeConfig leaves a missing Claude directory alone');
+
+GLib.setenv('CLAUDE_CONFIG_DIR', tmp, true);
+writeConfig(settings, 'Acme Inc');
+const written = GLib.build_filenamev([tmp, 'statusline-config.txt']);
+assert(GLib.file_test(written, GLib.FileTest.EXISTS),
+    'writeConfig still projects into an existing Claude directory');
+
+Gio.File.new_for_path(written).delete(null);
+Gio.File.new_for_path(tmp).delete(null);
 
 print('skin checks passed');
