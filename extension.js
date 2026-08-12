@@ -100,7 +100,12 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         });
         this._panelBox.add_child(this._icon);
 
-        this._panelProgress = new St.Widget({style_class: 'cut-panel-progress'});
+        // Without an explicit alignment the box layout fills the cross axis, so the
+        // track grows to the panel height instead of the 9px the stylesheet asks for.
+        this._panelProgress = new St.Widget({
+            style_class: 'cut-panel-progress',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
         this._panelProgressFill = new St.Widget({style_class: 'cut-panel-progress-fill'});
         this._panelProgress.add_child(this._panelProgressFill);
         this._panelBox.add_child(this._panelProgress);
