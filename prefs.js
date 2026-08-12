@@ -9,12 +9,82 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
 
 import {
     SKIN_KEYS,
-    install,
-    isInstalled,
-    remove,
+    claudeDirectory,
+    readAccountLabelAsync,
     statuslineCommand,
     writeConfig,
 } from './skin.js';
+
+const SETTINGS_FILE = 'settings.json';
+
+/**
+ * Claude Code's settings.json handling lives here rather than in `skin.js`
+ * because preferences runs in its own process, where a synchronous read is
+ * harmless. `skin.js` is imported by the shell and must stay async-only.
+ */
+function readText(path) {
+    if (!GLib.file_test(path, GLib.FileTest.EXISTS))
+        return null;
+    const [ok, bytes] = GLib.file_get_contents(path);
+    return ok ? new TextDecoder().decode(bytes) : null;
+}
+
+function settingsPath() {
+    return GLib.build_filenamev([claudeDirectory(), SETTINGS_FILE]);
+}
+
+/** True when Claude Code is already pointed at this extension's skin. */
+function isInstalled(extensionPath) {
+    try {
+        const text = readText(settingsPath());
+        return text
+            ? JSON.parse(text).statusLine?.command === statuslineCommand(extensionPath)
+            : false;
+    } catch (_error) {
+        return false;
+    }
+}
+
+/**
+ * Point Claude Code's statusLine at this extension, keeping a timestamped backup
+ * of the previous settings.json. Returns the backup path, or null when the file
+ * did not exist yet.
+ */
+function install(extensionPath) {
+    const path = settingsPath();
+    const text = readText(path);
+    let backup = null;
+
+    if (text !== null) {
+        const stamp = GLib.DateTime.new_now_local().format('%Y%m%d-%H%M%S');
+        backup = `${path}.claude-usage-tracker-backup-${stamp}`;
+        GLib.file_set_contents(backup, text);
+        GLib.chmod(backup, 0o600);
+    }
+
+    // Throwing on malformed JSON is deliberate: overwriting a settings file we
+    // cannot parse would discard configuration we never read.
+    const settings = text === null ? {} : JSON.parse(text);
+    settings.statusLine = {type: 'command', command: statuslineCommand(extensionPath)};
+
+    GLib.mkdir_with_parents(claudeDirectory(), 0o700);
+    GLib.file_set_contents(path, `${JSON.stringify(settings, null, 2)}\n`);
+    GLib.chmod(path, 0o600);
+    return backup;
+}
+
+/** Remove the statusLine entry, leaving the rest of settings.json untouched. */
+function remove() {
+    const path = settingsPath();
+    const text = readText(path);
+    if (text === null)
+        return;
+
+    const settings = JSON.parse(text);
+    delete settings.statusLine;
+    GLib.file_set_contents(path, `${JSON.stringify(settings, null, 2)}\n`);
+    GLib.chmod(path, 0o600);
+}
 
 const BASIC_ANSI = {
     30: '#000000', 31: '#CC0000', 32: '#4E9A06', 33: '#C4A000',
@@ -177,11 +247,10 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         const colorModeId = this._buildSkinPage(window, settings);
 
         // The skin reads a file, not GSettings, so every change is projected out.
+        // The preview renders the real file, so it has to wait for the write.
         const changedId = settings.connect('changed', (_settings, key) => {
-            if (SKIN_KEYS.includes(key)) {
-                this._writeSkinConfig(settings);
-                this._refreshPreview();
-            }
+            if (SKIN_KEYS.includes(key))
+                this._writeSkinConfig(settings).then(() => this._refreshPreview());
         });
         window.connect('close-request', () => {
             settings.disconnect(changedId);
@@ -189,13 +258,12 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
             this._stopPreview();
             this._preview = null;
         });
-        this._writeSkinConfig(settings);
-        this._refreshPreview();
+        this._writeSkinConfig(settings).then(() => this._refreshPreview());
     }
 
-    _writeSkinConfig(settings) {
+    async _writeSkinConfig(settings) {
         try {
-            writeConfig(settings);
+            writeConfig(settings, await readAccountLabelAsync());
         } catch (error) {
             console.error(`Claude Usage Tracker: skin config write failed: ${error.message}`);
         }

@@ -1,3 +1,4 @@
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
 /**
@@ -11,7 +12,6 @@ import GLib from 'gi://GLib';
 
 const CONFIG_FILE = 'statusline-config.txt';
 const CACHE_FILE = '.statusline-usage-cache';
-const SETTINGS_FILE = 'settings.json';
 
 /** GSettings key -> statusline-config.txt key. */
 const BOOLEAN_KEYS = {
@@ -61,40 +61,65 @@ export function claudeDirectory() {
         GLib.build_filenamev([GLib.get_home_dir(), '.claude']);
 }
 
-function readText(path) {
-    if (!GLib.file_test(path, GLib.FileTest.EXISTS))
-        return null;
-    const [ok, bytes] = GLib.file_get_contents(path);
-    return ok ? new TextDecoder().decode(bytes) : null;
+/**
+ * Every read in this module is async: it is imported by `extension.js`, and a
+ * synchronous read blocks the compositor. A missing file raises `NOT_FOUND`
+ * rather than needing an existence check first, so this reports every failure
+ * the same way: no text. The synchronous counterparts that only preferences
+ * needs live in `prefs.js`, which runs in its own process.
+ */
+export function loadTextAsync(path, cancellable = null) {
+    return new Promise(resolve => {
+        Gio.File.new_for_path(path).load_contents_async(cancellable, (file, result) => {
+            try {
+                const [, bytes] = file.load_contents_finish(result);
+                resolve(new TextDecoder().decode(bytes));
+            } catch (_error) {
+                // Missing, unreadable, and cancelled all mean the same thing here.
+                resolve(null);
+            }
+        });
+    });
 }
 
-/** Account label used as the skin's profile name. */
-export function readAccountLabel() {
+/** Where Claude Code may have written the account metadata, best candidate first. */
+function accountPaths() {
     const configured = GLib.getenv('CLAUDE_CONFIG_DIR');
-    const candidates = [
+    return [
         configured && GLib.build_filenamev([configured, '.claude.json']),
         GLib.build_filenamev([GLib.get_home_dir(), '.claude.json']),
         GLib.build_filenamev([GLib.get_home_dir(), '.claude', '.claude.json']),
     ].filter(Boolean);
+}
 
-    for (const path of candidates) {
-        try {
-            const text = readText(path);
-            if (!text)
-                continue;
-            const account = JSON.parse(text).oauthAccount;
-            const label = account?.organizationName || account?.displayName || account?.email;
-            if (typeof label === 'string' && label.trim())
-                return label.trim().slice(0, 40);
-        } catch (_error) {
-            // Optional account metadata never blocks anything.
-        }
+function accountLabelFrom(text) {
+    if (!text)
+        return '';
+    try {
+        const account = JSON.parse(text).oauthAccount;
+        const label = account?.organizationName || account?.displayName || account?.email;
+        return typeof label === 'string' && label.trim() ? label.trim().slice(0, 40) : '';
+    } catch (_error) {
+        // Optional account metadata never blocks anything.
+        return '';
+    }
+}
+
+/**
+ * Shell-side reader. `.claude.json` carries Claude Code's project history and
+ * grows without bound, so the panel must never parse it synchronously.
+ */
+export async function readAccountLabelAsync(cancellable = null) {
+    for (const path of accountPaths()) {
+        const label = accountLabelFrom(await loadTextAsync(path, cancellable));
+        if (label)
+            return label;
     }
     return '';
 }
 
 /** Render settings as the mac-compatible config file body. */
-export function renderConfig(settings, profileName = readAccountLabel()) {
+export function renderConfig(settings, profileName = '') {
     const lines = ['# Written by Claude Usage Tracker. Edits are overwritten from preferences.'];
     for (const [key, name] of Object.entries(BOOLEAN_KEYS))
         lines.push(`${name}=${settings.get_boolean(key) ? '1' : '0'}`);
@@ -111,7 +136,7 @@ export function renderConfig(settings, profileName = readAccountLabel()) {
  * DEFAULTS carry the same values, so it renders identically until Claude Code
  * shows up and the next write lands.
  */
-export function writeConfig(settings, profileName = readAccountLabel()) {
+export function writeConfig(settings, profileName = '') {
     const directory = claudeDirectory();
     if (!GLib.file_test(directory, GLib.FileTest.IS_DIR))
         return;
@@ -152,63 +177,6 @@ export function writeUsageCache(metrics, extra, now = Date.now()) {
     GLib.chmod(path, 0o600);
 }
 
-function settingsPath() {
-    return GLib.build_filenamev([claudeDirectory(), SETTINGS_FILE]);
-}
-
 export function statuslineCommand(extensionPath) {
     return `node "${GLib.build_filenamev([extensionPath, 'statusline.js'])}"`;
-}
-
-/** True when Claude Code is already pointed at this extension's skin. */
-export function isInstalled(extensionPath) {
-    try {
-        const text = readText(settingsPath());
-        return text
-            ? JSON.parse(text).statusLine?.command === statuslineCommand(extensionPath)
-            : false;
-    } catch (_error) {
-        return false;
-    }
-}
-
-/**
- * Point Claude Code's statusLine at this extension, keeping a timestamped backup
- * of the previous settings.json. Returns the backup path, or null when the file
- * did not exist yet.
- */
-export function install(extensionPath) {
-    const path = settingsPath();
-    const text = readText(path);
-    let backup = null;
-
-    if (text !== null) {
-        const stamp = GLib.DateTime.new_now_local().format('%Y%m%d-%H%M%S');
-        backup = `${path}.claude-usage-tracker-backup-${stamp}`;
-        GLib.file_set_contents(backup, text);
-        GLib.chmod(backup, 0o600);
-    }
-
-    // Throwing on malformed JSON is deliberate: overwriting a settings file we
-    // cannot parse would discard configuration we never read.
-    const settings = text === null ? {} : JSON.parse(text);
-    settings.statusLine = {type: 'command', command: statuslineCommand(extensionPath)};
-
-    GLib.mkdir_with_parents(claudeDirectory(), 0o700);
-    GLib.file_set_contents(path, `${JSON.stringify(settings, null, 2)}\n`);
-    GLib.chmod(path, 0o600);
-    return backup;
-}
-
-/** Remove the statusLine entry, leaving the rest of settings.json untouched. */
-export function remove() {
-    const path = settingsPath();
-    const text = readText(path);
-    if (text === null)
-        return;
-
-    const settings = JSON.parse(text);
-    delete settings.statusLine;
-    GLib.file_set_contents(path, `${JSON.stringify(settings, null, 2)}\n`);
-    GLib.chmod(path, 0o600);
 }

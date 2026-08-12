@@ -18,7 +18,13 @@ import {
     normalizeUsage,
     sanitizeHistory,
 } from './usage.js';
-import {SKIN_KEYS, readAccountLabel, writeConfig, writeUsageCache} from './skin.js';
+import {
+    SKIN_KEYS,
+    loadTextAsync,
+    readAccountLabelAsync,
+    writeConfig,
+    writeUsageCache,
+} from './skin.js';
 
 const API_URL = 'https://api.anthropic.com/api/oauth/usage';
 const HISTORY_DIRECTORY = 'claude-usage-tracker';
@@ -58,12 +64,14 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         this._openPreferences = openPreferences;
         this._session = new Soup.Session({timeout: 15});
         this._cancellable = null;
+        this._ioCancellable = new Gio.Cancellable();
         this._timerId = 0;
         this._historyWriteId = 0;
         this._refreshing = false;
         this._destroyed = false;
         this._lastMetrics = [];
-        this._history = this._loadHistory();
+        this._history = sanitizeHistory(null);
+        this._accountName = 'Claude Code';
 
         this._buildPanel();
         this._buildMenu();
@@ -84,10 +92,25 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
                 this._writeSkinConfig();
         });
 
+        // History has to land before the first sample is appended, otherwise the
+        // load would overwrite it; the account label only gates cosmetics, so it
+        // runs alongside.
+        this._loadAccountName();
+        this._loadHistory().then(() => {
+            if (!this._destroyed)
+                this._refreshUsage();
+        });
+        this._startTimer();
+    }
+
+    async _loadAccountName() {
+        const label = await readAccountLabelAsync(this._ioCancellable);
+        if (this._destroyed)
+            return;
+        this._accountName = label || 'Claude Code';
+        this._accountLabel.text = this._accountName;
         // Keeps a fresh install working before preferences are ever opened.
         this._writeSkinConfig();
-        this._refreshUsage();
-        this._startTimer();
     }
 
     _buildPanel() {
@@ -133,7 +156,7 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
             style_class: 'cut-identity',
         });
         this._accountLabel = new St.Label({
-            text: this._readAccountLabel(),
+            text: this._accountName,
             style_class: 'cut-account',
         });
         identity.add_child(this._accountLabel);
@@ -205,14 +228,17 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         ];
     }
 
-    _readCredentials() {
+    async _readCredentials() {
         let invalidFile = false;
+        // Captured once: destroy() drops the reference, and every remaining read
+        // in this loop still has to see the cancellation.
+        const cancellable = this._ioCancellable;
         for (const path of this._credentialPaths()) {
-            if (!GLib.file_test(path, GLib.FileTest.EXISTS))
+            const text = await loadTextAsync(path, cancellable);
+            if (text === null)
                 continue;
             try {
-                const [, bytes] = GLib.file_get_contents(path);
-                const data = JSON.parse(new TextDecoder().decode(bytes));
+                const data = JSON.parse(text);
                 const oauth = data.claudeAiOauth;
                 if (!oauth?.accessToken)
                     throw new Error('missing access token');
@@ -231,23 +257,24 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         throw new Error('Claude Code credentials not found. Run claude auth login.');
     }
 
-    _readAccountLabel() {
-        return readAccountLabel() || 'Claude Code';
-    }
-
-    _refreshUsage() {
+    async _refreshUsage() {
         if (this._refreshing)
             return;
+        this._setLoading(true);
 
         let token;
         try {
-            token = this._readCredentials();
+            token = await this._readCredentials();
         } catch (error) {
-            this._showFailure(error.message);
+            if (!this._destroyed) {
+                this._setLoading(false);
+                this._showFailure(error.message);
+            }
             return;
         }
+        if (this._destroyed)
+            return;
 
-        this._setLoading(true);
         this._cancellable = new Gio.Cancellable();
         const message = Soup.Message.new('GET', API_URL);
         message.request_headers.append('Authorization', `Bearer ${token}`);
@@ -287,7 +314,6 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
 
     _showUsage(metrics) {
         this._lastMetrics = metrics;
-        this._accountLabel.text = this._readAccountLabel();
         this._errorBox.hide();
         this._setState('Updated just now', 'ready');
         this._renderMetrics();
@@ -313,7 +339,7 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
 
     _writeSkinConfig() {
         try {
-            writeConfig(this._settings, this._readAccountLabel());
+            writeConfig(this._settings, this._accountName);
         } catch (error) {
             console.error(`Claude Usage Tracker: skin config write failed: ${error.message}`);
         }
@@ -455,16 +481,16 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         ]);
     }
 
-    _loadHistory() {
+    async _loadHistory() {
+        const text = await loadTextAsync(this._historyPath(), this._ioCancellable);
+        if (this._destroyed)
+            return;
         try {
-            const path = this._historyPath();
-            if (!GLib.file_test(path, GLib.FileTest.EXISTS))
-                return sanitizeHistory(null);
-            const [, bytes] = GLib.file_get_contents(path);
-            return sanitizeHistory(JSON.parse(new TextDecoder().decode(bytes)));
+            this._history = sanitizeHistory(text === null ? null : JSON.parse(text));
         } catch (_error) {
-            return sanitizeHistory(null);
+            this._history = sanitizeHistory(null);
         }
+        this._restoreHistorySnapshot();
     }
 
     _writeHistory() {
@@ -630,6 +656,8 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         }
         this._cancellable?.cancel();
         this._cancellable = null;
+        this._ioCancellable?.cancel();
+        this._ioCancellable = null;
         this._session.abort();
         this._session = null;
         if (this._settingsChangedId) {

@@ -1,7 +1,14 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
-import {SKIN_KEYS, renderConfig, statuslineCommand, writeConfig} from '../skin.js';
+import {
+    SKIN_KEYS,
+    loadTextAsync,
+    readAccountLabelAsync,
+    renderConfig,
+    statuslineCommand,
+    writeConfig,
+} from '../skin.js';
 
 const SCHEMA_ID = 'org.gnome.shell.extensions.claude-usage-tracker';
 
@@ -99,6 +106,31 @@ const written = GLib.build_filenamev([tmp, 'statusline-config.txt']);
 assert(GLib.file_test(written, GLib.FileTest.EXISTS),
     'writeConfig still projects into an existing Claude directory');
 
+// Everything the shell reads goes through the async path: `.claude.json` carries
+// Claude Code's project history and must never be parsed on the compositor
+// thread. A missing file is reported, not thrown.
+const account = GLib.build_filenamev([tmp, '.claude.json']);
+GLib.file_set_contents(account,
+    JSON.stringify({oauthAccount: {organizationName: 'Acme Inc'}}));
+
+const loop = GLib.MainLoop.new(null, false);
+let asyncError = null;
+(async () => {
+    try {
+        assert(await loadTextAsync(missing) === null,
+            'loadTextAsync reports a missing file as no text');
+        assert(await readAccountLabelAsync() === 'Acme Inc',
+            'readAccountLabelAsync reads the account label');
+    } catch (error) {
+        asyncError = error;
+    }
+    loop.quit();
+})();
+loop.run();
+if (asyncError)
+    throw asyncError;
+
+Gio.File.new_for_path(account).delete(null);
 Gio.File.new_for_path(written).delete(null);
 Gio.File.new_for_path(tmp).delete(null);
 

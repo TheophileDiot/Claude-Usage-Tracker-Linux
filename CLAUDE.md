@@ -100,6 +100,12 @@ must never be able to inject a second `KEY=` line (tested).
 - **Shell lifecycle.** `destroy()` must clear every timeout, idle source, cancellable, Soup
   session, and signal handler; `prefs.js` must cancel the preview subprocess on `close-request`.
   Leaked sources survive disable/enable and are the recurring bug class here.
+- **No synchronous reads in shell code.** `extension.js` imports `skin.js`, so every read there
+  goes through `loadTextAsync()`; a sync read blocks the compositor and EGO review flags it.
+  `~/.claude.json` is the reason it matters — it carries Claude Code's project history and grows
+  without bound, so the account label is read once at enable and cached, never per refresh. The
+  sync `settings.json` helpers (`install`, `remove`, `isInstalled`) live in `prefs.js` because
+  preferences runs in its own process; do not move them back into `skin.js`.
 - **Dynamic limits over hard-coded models.** `normalizeUsage()` handles both the legacy
   `five_hour`/`seven_day_*` fields and the current `limits[]` array, keys models off
   `scope.model`, and throws when a payload yields nothing usable (fail closed, cached data stays
