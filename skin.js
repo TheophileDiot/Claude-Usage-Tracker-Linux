@@ -82,6 +82,37 @@ export function loadTextAsync(path, cancellable = null) {
     });
 }
 
+/**
+ * Counterpart to `loadTextAsync`, for the same reason: a synchronous write from
+ * shell code blocks the compositor. `PRIVATE` creates the file 0600 and the
+ * explicit `chmod` keeps that true for a file an earlier version already left
+ * world-readable. Rejects on failure so the caller can log it — except on
+ * cancellation, which only ever means the extension is being disabled.
+ */
+export function writeTextAsync(path, text, cancellable = null) {
+    return new Promise((resolve, reject) => {
+        Gio.File.new_for_path(path).replace_contents_bytes_async(
+            new GLib.Bytes(new TextEncoder().encode(text)),
+            null,
+            false,
+            Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION,
+            cancellable,
+            (file, result) => {
+                try {
+                    file.replace_contents_finish(result);
+                    GLib.chmod(path, 0o600);
+                    resolve();
+                } catch (error) {
+                    if (error.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                        resolve();
+                    else
+                        reject(error);
+                }
+            }
+        );
+    });
+}
+
 /** Where Claude Code may have written the account metadata, best candidate first. */
 function accountPaths() {
     const configured = GLib.getenv('CLAUDE_CONFIG_DIR');
@@ -136,13 +167,12 @@ export function renderConfig(settings, profileName = '') {
  * DEFAULTS carry the same values, so it renders identically until Claude Code
  * shows up and the next write lands.
  */
-export function writeConfig(settings, profileName = '') {
+export function writeConfig(settings, profileName = '', cancellable = null) {
     const directory = claudeDirectory();
     if (!GLib.file_test(directory, GLib.FileTest.IS_DIR))
-        return;
+        return Promise.resolve();
     const path = GLib.build_filenamev([directory, CONFIG_FILE]);
-    GLib.file_set_contents(path, renderConfig(settings, profileName));
-    GLib.chmod(path, 0o600);
+    return writeTextAsync(path, renderConfig(settings, profileName), cancellable);
 }
 
 /**
@@ -155,7 +185,7 @@ export function writeConfig(settings, profileName = '') {
  * model in `limits[]` instead, and Claude Code's stdin payload carries only
  * `five_hour` and `seven_day`, so this cache is the skin's only weekly source.
  */
-export function writeUsageCache(metrics, extra, now = Date.now()) {
+export function writeUsageCache(metrics, extra, now = Date.now(), cancellable = null) {
     const find = id => metrics.find(item => item.id === id);
     const session = find('session');
     const weekly = find('weekly') ??
@@ -178,10 +208,9 @@ export function writeUsageCache(metrics, extra, now = Date.now()) {
 
     const directory = claudeDirectory();
     if (!GLib.file_test(directory, GLib.FileTest.IS_DIR))
-        return;
+        return Promise.resolve();
     const path = GLib.build_filenamev([directory, CACHE_FILE]);
-    GLib.file_set_contents(path, `${lines.join('\n')}\n`);
-    GLib.chmod(path, 0o600);
+    return writeTextAsync(path, `${lines.join('\n')}\n`, cancellable);
 }
 
 export function statuslineCommand(extensionPath) {

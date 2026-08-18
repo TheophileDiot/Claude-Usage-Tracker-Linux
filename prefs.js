@@ -263,7 +263,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
 
     async _writeSkinConfig(settings) {
         try {
-            writeConfig(settings, await readAccountLabelAsync());
+            await writeConfig(settings, await readAccountLabelAsync());
         } catch (error) {
             console.error(`Claude Usage Tracker: skin config write failed: ${error.message}`);
         }

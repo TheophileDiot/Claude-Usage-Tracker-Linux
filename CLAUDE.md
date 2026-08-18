@@ -103,12 +103,20 @@ must never be able to inject a second `KEY=` line (tested).
 - **Shell lifecycle.** `destroy()` must clear every timeout, idle source, cancellable, Soup
   session, and signal handler; `prefs.js` must cancel the preview subprocess on `close-request`.
   Leaked sources survive disable/enable and are the recurring bug class here.
-- **No synchronous reads in shell code.** `extension.js` imports `skin.js`, so every read there
-  goes through `loadTextAsync()`; a sync read blocks the compositor and EGO review flags it.
-  `~/.claude.json` is the reason it matters — it carries Claude Code's project history and grows
-  without bound, so the account label is read once at enable and cached, never per refresh. The
-  sync `settings.json` helpers (`install`, `remove`, `isInstalled`) live in `prefs.js` because
+- **No synchronous I/O in shell code.** `extension.js` imports `skin.js`, so every read there
+  goes through `loadTextAsync()` and every write through `writeTextAsync()`; sync I/O blocks the
+  compositor and EGO review flags it. `~/.claude.json` is the reason reads matter — it carries
+  Claude Code's project history and grows without bound, so the account label is read once at
+  enable and cached, never per refresh. `writeTextAsync()` writes with `PRIVATE` and chmods to
+  0600, and treats cancellation as success because the only canceller is `disable()`. The sync
+  `settings.json` helpers (`install`, `remove`, `isInstalled`) live in `prefs.js` because
   preferences runs in its own process; do not move them back into `skin.js`.
+- **Bar geometry is scaled by hand.** St multiplies CSS pixels by
+  `St.ThemeContext.scale_factor`, `Clutter.Actor.set_width()`/`set_height()` do not. Every fill
+  sized in `extension.js` is measured against a track sized in `stylesheet.css`, so the
+  `CARD_TRACK_WIDTH` / `PANEL_TRACK_WIDTH` / `HISTORY_BAR_HEIGHT` constants carry the CSS value
+  and are multiplied by the scale factor at use; unscaled, a fill tops out at 1/scale of its
+  track on HiDPI. Changing one of those CSS lengths means changing its constant.
 - **Dynamic limits over hard-coded models.** `normalizeUsage()` handles both the legacy
   `five_hour`/`seven_day_*` fields and the current `limits[]` array, keys models off
   `scope.model`, and throws when a payload yields nothing usable (fail closed, cached data stays

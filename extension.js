@@ -6,6 +6,7 @@ import Soup from 'gi://Soup';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -23,6 +24,7 @@ import {
     loadTextAsync,
     readAccountLabelAsync,
     writeConfig,
+    writeTextAsync,
     writeUsageCache,
 } from './skin.js';
 
@@ -30,10 +32,16 @@ const API_URL = 'https://api.anthropic.com/api/oauth/usage';
 const HISTORY_DIRECTORY = 'claude-usage-tracker';
 const HISTORY_FILE = 'history.json';
 
-function replaceChildren(actor) {
-    for (const child of actor.get_children())
-        child.destroy();
-}
+/**
+ * Bar fills are sized from code against tracks sized in `stylesheet.css`. St
+ * multiplies every CSS pixel by the theme context's scale factor, while
+ * `Clutter.Actor` geometry is raw stage coordinates, so these have to be scaled
+ * by hand or a fill only ever reaches 1/scale of its track on HiDPI.
+ */
+const CARD_TRACK_WIDTH = 250;   // .cut-progress-track
+const PANEL_TRACK_WIDTH = 46;   // .cut-panel-progress
+const HISTORY_BAR_HEIGHT = 22;  // .cut-history-slot
+const HISTORY_BAR_MINIMUM = 2;
 
 function usageLevel(value) {
     if (value >= 80)
@@ -72,12 +80,23 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         this._lastMetrics = [];
         this._history = sanitizeHistory(null);
         this._accountName = 'Claude Code';
+        this._notificationSource = null;
+        this._notificationSourceDestroyId = 0;
+        this._themeContext = St.ThemeContext.get_for_stage(global.stage);
 
         this._buildPanel();
         this._buildMenu();
         this._restoreHistorySnapshot();
         this._updatePanelMode();
         this._updateIcon();
+
+        // Every bar is sized in stage coordinates, so a monitor scale change has
+        // to redraw them rather than wait for the next refresh.
+        this._scaleChangedId = this._themeContext.connect('notify::scale-factor', () => {
+            this._renderMetrics();
+            this._renderHistory();
+            this._updatePanel();
+        });
 
         this._settingsChangedId = this._settings.connect('changed', (_settings, key) => {
             if (key === 'refresh-interval')
@@ -330,19 +349,19 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
 
     /** Feed the Claude Code skin: session/weekly fallbacks and extra-usage cost. */
     _writeSkinCache(metrics) {
-        try {
-            writeUsageCache(metrics, metrics.find(item => item.id === 'extra')?.cost);
-        } catch (error) {
-            console.error(`Claude Usage Tracker: skin cache write failed: ${error.message}`);
-        }
+        writeUsageCache(
+            metrics,
+            metrics.find(item => item.id === 'extra')?.cost,
+            Date.now(),
+            this._ioCancellable
+        ).catch(error => console.error(
+            `Claude Usage Tracker: skin cache write failed: ${error.message}`));
     }
 
     _writeSkinConfig() {
-        try {
-            writeConfig(this._settings, this._accountName);
-        } catch (error) {
-            console.error(`Claude Usage Tracker: skin config write failed: ${error.message}`);
-        }
+        writeConfig(this._settings, this._accountName, this._ioCancellable)
+            .catch(error => console.error(
+                `Claude Usage Tracker: skin config write failed: ${error.message}`));
     }
 
     _showFailure(message) {
@@ -379,7 +398,8 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
     }
 
     _renderMetrics() {
-        replaceChildren(this._metricsBox);
+        this._metricsBox.destroy_all_children();
+        const scale = this._themeContext.scale_factor;
         for (const item of this._lastMetrics) {
             const card = new St.BoxLayout({vertical: true, style_class: 'cut-card'});
             const kind = this._settings.get_string('percentage-mode') === 'remaining'
@@ -412,7 +432,7 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
 
             const track = new St.Widget({style_class: 'cut-progress-track'});
             const fill = new St.Widget({style_class: `cut-progress-fill usage-${item.level}`});
-            fill.set_width(Math.round(250 * value / 100));
+            fill.set_width(Math.round(CARD_TRACK_WIDTH * scale * value / 100));
             track.add_child(fill);
             card.add_child(track);
 
@@ -435,7 +455,8 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
 
         const value = this._displayValue(metric);
         this._panelLabel.text = `${Math.round(value)}%`;
-        this._panelProgressFill.set_width(Math.round(46 * value / 100));
+        this._panelProgressFill.set_width(Math.round(
+            PANEL_TRACK_WIDTH * this._themeContext.scale_factor * value / 100));
         for (const actor of [this._panelLabel, this._panelProgressFill]) {
             for (const name of ['usage-safe', 'usage-moderate', 'usage-critical'])
                 actor.remove_style_class_name(name);
@@ -498,18 +519,17 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
             return;
         this._historyWriteId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this._historyWriteId = 0;
-            try {
-                const directory = GLib.build_filenamev([
-                    GLib.get_user_state_dir(),
-                    HISTORY_DIRECTORY,
-                ]);
-                GLib.mkdir_with_parents(directory, 0o700);
-                // ponytail: bounded seven-day file keeps this atomic write small.
-                GLib.file_set_contents(this._historyPath(), JSON.stringify(this._history));
-                GLib.chmod(this._historyPath(), 0o600);
-            } catch (error) {
-                console.error(`Claude Usage Tracker: history write failed: ${error.message}`);
-            }
+            const directory = GLib.build_filenamev([
+                GLib.get_user_state_dir(),
+                HISTORY_DIRECTORY,
+            ]);
+            GLib.mkdir_with_parents(directory, 0o700);
+            writeTextAsync(
+                this._historyPath(),
+                JSON.stringify(this._history),
+                this._ioCancellable
+            ).catch(error => console.error(
+                `Claude Usage Tracker: history write failed: ${error.message}`));
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -545,7 +565,8 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
     }
 
     _renderHistory() {
-        replaceChildren(this._historyBox);
+        this._historyBox.destroy_all_children();
+        const scale = this._themeContext.scale_factor;
         const rows = [
             ['session', 'Session'],
             ['weekly', 'Weekly'],
@@ -593,7 +614,9 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
                         ? 'cut-history-bar history-empty'
                         : `cut-history-bar usage-${usageLevel(value)}`,
                 });
-                bar.set_height(value === null ? 2 : Math.max(2, Math.round(value / 100 * 22)));
+                const minimum = HISTORY_BAR_MINIMUM * scale;
+                bar.set_height(value === null ? minimum : Math.max(minimum,
+                    Math.round(HISTORY_BAR_HEIGHT * scale * value / 100)));
                 slot.add_child(bar);
                 bars.add_child(slot);
             }
@@ -620,11 +643,37 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
             this._settings.set_int('last-notified-threshold', transition.state.lastThreshold);
 
         if (transition.threshold && this._settings.get_boolean('notifications-enabled')) {
-            Main.notify(
-                'Claude usage',
-                `${Math.round(session.percent)}% of the 5-hour window is used.`
-            );
+            this._notify(
+                `${Math.round(session.percent)}% of the 5-hour window is used.`);
         }
+    }
+
+    /**
+     * An owned source carries the tracker's name and icon and keeps the alert in
+     * the message tray; `Main.notify()` posts a transient banner attributed to
+     * "System". The tray destroys a source once its last notification goes, so
+     * this rebuilds one on demand rather than holding a stale reference.
+     */
+    _notify(body) {
+        if (!this._notificationSource) {
+            const source = new MessageTray.Source({
+                title: 'Claude Usage Tracker',
+                icon: Gio.icon_new_for_string(
+                    GLib.build_filenamev([this._extensionPath, 'claude-usage.svg'])),
+            });
+            this._notificationSourceDestroyId = source.connect('destroy', () => {
+                this._notificationSource = null;
+                this._notificationSourceDestroyId = 0;
+            });
+            this._notificationSource = source;
+            Main.messageTray.add(source);
+        }
+
+        this._notificationSource.addNotification(new MessageTray.Notification({
+            source: this._notificationSource,
+            title: 'Claude usage',
+            body,
+        }));
     }
 
     _startTimer() {
@@ -664,6 +713,18 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
             this._settings.disconnect(this._settingsChangedId);
             this._settingsChangedId = 0;
         }
+        if (this._scaleChangedId) {
+            this._themeContext.disconnect(this._scaleChangedId);
+            this._scaleChangedId = 0;
+        }
+        this._themeContext = null;
+        if (this._notificationSourceDestroyId) {
+            this._notificationSource.disconnect(this._notificationSourceDestroyId);
+            this._notificationSourceDestroyId = 0;
+        }
+        this._notificationSource?.destroy(
+            MessageTray.NotificationDestroyedReason.SOURCE_CLOSED);
+        this._notificationSource = null;
         super.destroy();
     }
 });

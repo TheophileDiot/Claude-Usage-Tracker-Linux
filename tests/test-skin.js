@@ -93,24 +93,12 @@ settings.set_string('statusline-single-color', '#00BFFF');
 assert(statuslineCommand('/opt/ext') === 'node "/opt/ext/statusline.js"',
     'statusline command quotes the script path');
 
-// The config write must never conjure a Claude directory into existence.
+// Shell code must not block the compositor on I/O, so both writers are async.
 const tmp = GLib.Dir.make_tmp('claude-usage-tracker-XXXXXX');
 const missing = GLib.build_filenamev([tmp, 'missing']);
-GLib.setenv('CLAUDE_CONFIG_DIR', missing, true);
-writeConfig(settings, 'Acme Inc');
-assert(!GLib.file_test(missing, GLib.FileTest.EXISTS),
-    'writeConfig leaves a missing Claude directory alone');
-
-GLib.setenv('CLAUDE_CONFIG_DIR', tmp, true);
-writeConfig(settings, 'Acme Inc');
 const written = GLib.build_filenamev([tmp, 'statusline-config.txt']);
 const cached = GLib.build_filenamev([tmp, '.statusline-usage-cache']);
-assert(GLib.file_test(written, GLib.FileTest.EXISTS),
-    'writeConfig still projects into an existing Claude directory');
 
-// The skin's weekly component has no other source: Claude Code puts only
-// `five_hour` and `seven_day` on stdin, and the API now reports the weekly
-// window per model instead of as one all-models figure.
 const readCache = () => Object.fromEntries(new TextDecoder()
     .decode(GLib.file_get_contents(cached)[1])
     .split('\n')
@@ -120,33 +108,12 @@ const readCache = () => Object.fromEntries(new TextDecoder()
         return [line.slice(0, index), line.slice(index + 1)];
     }));
 
-writeUsageCache([
-    {id: 'session', percent: 21, resetAt: '2026-08-18T11:20:00Z'},
-    {id: 'model:fable', percent: 3, resetAt: '2026-08-22T01:59:59Z'},
-], null);
-assert(readCache().UTILIZATION === '21', 'the cache carries the session window');
-assert(readCache().WEEKLY_UTILIZATION === '3',
-    'a model-scoped metric fills the weekly line when seven_day is gone');
-assert(readCache().WEEKLY_RESETS_AT === '2026-08-22T01:59:59Z',
-    'the model-scoped reset time comes along with it');
+const mode = path => Gio.File.new_for_path(path)
+    .query_info('unix::mode', Gio.FileQueryInfoFlags.NONE, null)
+    .get_attribute_uint32('unix::mode') & 0o777;
 
-writeUsageCache([
-    {id: 'weekly', percent: 40, resetAt: ''},
-    {id: 'model:fable', percent: 3, resetAt: ''},
-], null);
-assert(readCache().WEEKLY_UTILIZATION === '40',
-    'an all-models window still wins over the model-scoped fallback');
-
-// Neither writer may conjure a Claude directory into existence.
-GLib.setenv('CLAUDE_CONFIG_DIR', missing, true);
-writeUsageCache([{id: 'session', percent: 1, resetAt: ''}], null);
-assert(!GLib.file_test(missing, GLib.FileTest.EXISTS),
-    'writeUsageCache leaves a missing Claude directory alone');
-GLib.setenv('CLAUDE_CONFIG_DIR', tmp, true);
-
-// Everything the shell reads goes through the async path: `.claude.json` carries
-// Claude Code's project history and must never be parsed on the compositor
-// thread. A missing file is reported, not thrown.
+// `.claude.json` carries Claude Code's project history and must never be parsed
+// on the compositor thread. A missing file is reported, not thrown.
 const account = GLib.build_filenamev([tmp, '.claude.json']);
 GLib.file_set_contents(account,
     JSON.stringify({oauthAccount: {organizationName: 'Acme Inc'}}));
@@ -155,6 +122,44 @@ const loop = GLib.MainLoop.new(null, false);
 let asyncError = null;
 (async () => {
     try {
+        // Neither writer may conjure a Claude directory into existence.
+        GLib.setenv('CLAUDE_CONFIG_DIR', missing, true);
+        await writeConfig(settings, 'Acme Inc');
+        await writeUsageCache([{id: 'session', percent: 1, resetAt: ''}], null);
+        assert(!GLib.file_test(missing, GLib.FileTest.EXISTS),
+            'neither writer touches a missing Claude directory');
+
+        GLib.setenv('CLAUDE_CONFIG_DIR', tmp, true);
+        await writeConfig(settings, 'Acme Inc');
+        assert(GLib.file_test(written, GLib.FileTest.EXISTS),
+            'writeConfig still projects into an existing Claude directory');
+
+        // The skin's weekly component has no other source: Claude Code puts only
+        // `five_hour` and `seven_day` on stdin, and the API now reports the
+        // weekly window per model instead of as one all-models figure.
+        await writeUsageCache([
+            {id: 'session', percent: 21, resetAt: '2026-08-18T11:20:00Z'},
+            {id: 'model:fable', percent: 3, resetAt: '2026-08-22T01:59:59Z'},
+        ], null);
+        assert(readCache().UTILIZATION === '21',
+            'the cache carries the session window');
+        assert(readCache().WEEKLY_UTILIZATION === '3',
+            'a model-scoped metric fills the weekly line when seven_day is gone');
+        assert(readCache().WEEKLY_RESETS_AT === '2026-08-22T01:59:59Z',
+            'the model-scoped reset time comes along with it');
+
+        await writeUsageCache([
+            {id: 'weekly', percent: 40, resetAt: ''},
+            {id: 'model:fable', percent: 3, resetAt: ''},
+        ], null);
+        assert(readCache().WEEKLY_UTILIZATION === '40',
+            'an all-models window still wins over the model-scoped fallback');
+
+        // Both files sit next to Claude Code's credentials; async writing must
+        // not have widened them.
+        assert(mode(written) === 0o600, 'the projected config stays owner-only');
+        assert(mode(cached) === 0o600, 'the usage cache stays owner-only');
+
         assert(await loadTextAsync(missing) === null,
             'loadTextAsync reports a missing file as no text');
         assert(await readAccountLabelAsync() === 'Acme Inc',
