@@ -5,5 +5,5 @@
   "settings-schema": "org.gnome.shell.extensions.claude-usage-tracker",
   "url": "https://github.com/TheophileDiot/Claude-Usage-Tracker-Linux",
   "version-name": "1.0.2",
-  "shell-version": ["46", "47", "48", "49", "50"]
+  "shell-version": ["46", "47", "48", "49", "50", "51"]
 }

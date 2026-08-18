@@ -61,6 +61,31 @@ function money(value, decimalPlaces = 2) {
     return (value / 10 ** places).toFixed(places);
 }
 
+/**
+ * Extra usage arrives twice: the older flat `extra_usage` block and a newer
+ * `spend` object carrying the same figures as minor units. `extra_usage` still
+ * wins while both are sent, so today's behaviour is unchanged; the fallback is
+ * only there for the payload that drops it.
+ */
+function extraUsageFrom(payload) {
+    const extra = payload.extra_usage;
+    if (extra && typeof extra === 'object')
+        return extra;
+
+    const spend = payload.spend;
+    if (!spend || typeof spend !== 'object')
+        return null;
+
+    return {
+        is_enabled: spend.enabled,
+        utilization: spend.percent,
+        used_credits: spend.used?.amount_minor,
+        monthly_limit: spend.limit?.amount_minor,
+        currency: spend.used?.currency ?? spend.limit?.currency,
+        decimal_places: spend.used?.exponent ?? spend.limit?.exponent,
+    };
+}
+
 /** Normalize both legacy fields and the current dynamic limits[] response. */
 export function normalizeUsage(payload) {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload))
@@ -126,7 +151,7 @@ export function normalizeUsage(payload) {
         }
     }
 
-    const extra = payload.extra_usage;
+    const extra = extraUsageFrom(payload);
     if (extra?.is_enabled) {
         const used = Number(extra.used_credits);
         const limit = Number(extra.monthly_limit);

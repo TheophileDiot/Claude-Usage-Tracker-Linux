@@ -120,7 +120,9 @@ must never be able to inject a second `KEY=` line (tested).
 - **Dynamic limits over hard-coded models.** `normalizeUsage()` handles both the legacy
   `five_hour`/`seven_day_*` fields and the current `limits[]` array, keys models off
   `scope.model`, and throws when a payload yields nothing usable (fail closed, cached data stays
-  on screen).
+  on screen). Extra usage arrives twice — the flat `extra_usage` block and a newer `spend`
+  object holding the same figures as minor units — so `extraUsageFrom()` prefers `extra_usage`
+  while both are sent and falls back to `spend` for the payload that drops it.
 - **Cached data stays useful.** Network and auth failures show the last good values with a stale
   state, never a blank panel.
 - **No dependencies, no bundler, no build step** beyond `glib-compile-schemas` and

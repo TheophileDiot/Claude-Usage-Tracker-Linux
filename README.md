@@ -12,7 +12,7 @@ The `┃` is the pace marker: it sits at the elapsed position in the window, so 
 
 ## Requirements
 
-- GNOME Shell 46 through 50 (developed and tested on 46)
+- GNOME Shell 46 through 51 (developed and tested on 46)
 - Claude Code signed in with `claude auth login`
 - Node.js 18 or newer for the Claude Code statusline
 - GJS, `glib-compile-schemas`, and `gnome-extensions`

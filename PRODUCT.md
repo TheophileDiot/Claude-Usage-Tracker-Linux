@@ -4,7 +4,7 @@
 
 ## Platform
 
-Native Linux desktop: Ubuntu 24.04 with GNOME Shell 46; declared compatible with 47 through 50.
+Native Linux desktop: Ubuntu 24.04 with GNOME Shell 46; declared compatible with 47 through 51.
 
 ## Stack
 
@@ -29,7 +29,7 @@ Runs as a Claude Code statusline and a GNOME Shell extension. The statusline use
 ## Capabilities and Constraints
 
 - Single Claude Code account.
-- GNOME Shell 46 is the development and test target; 47 through 50 are declared but untested.
+- GNOME Shell 46 is the development and test target; 47 through 51 are declared but untested.
 - Two-line Claude Code skin with directory, branch, model, effort, profile, context tokens, 5-hour/7-day limits, reset countdowns, and extra-usage percentage.
 - Read-only OAuth credentials; expired credentials send the user back to `claude auth login`.
 - Seven days of local percentage-only history, visualized as a 24-hour mini chart.

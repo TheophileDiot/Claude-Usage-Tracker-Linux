@@ -59,6 +59,42 @@ const wholeCurrency = normalizeUsage({
 });
 assert(wholeCurrency[0].subtitle === '500 / 1000 JPY',
     'extra usage respects currency decimal places');
+
+// The API duplicates extra usage under `spend`; that has to keep working once
+// the flat `extra_usage` block goes away, and stay ignored while it is there.
+const spendOnly = normalizeUsage({
+    five_hour: {utilization: 5, resets_at: reset},
+    spend: {
+        enabled: true,
+        percent: 56,
+        used: {amount_minor: 6171, currency: 'eur', exponent: 2},
+        limit: {amount_minor: 11000, currency: 'eur', exponent: 2},
+    },
+});
+const spendMetric = spendOnly.find(item => item.id === 'extra');
+assert(spendMetric?.percent === 56, 'spend fills in for a missing extra_usage');
+assert(spendMetric.subtitle === '61.71 / 110.00 EUR',
+    'spend minor units and exponent become the same money text');
+
+const bothBlocks = normalizeUsage({
+    five_hour: {utilization: 5, resets_at: reset},
+    extra_usage: {
+        is_enabled: false,
+        used_credits: 186,
+        monthly_limit: 500,
+        utilization: 37.2,
+        currency: 'usd',
+        decimal_places: 2,
+    },
+    spend: {
+        enabled: true,
+        percent: 56,
+        used: {amount_minor: 6171, currency: 'eur', exponent: 2},
+        limit: {amount_minor: 11000, currency: 'eur', exponent: 2},
+    },
+});
+assert(!bothBlocks.some(item => item.id === 'extra'),
+    'extra_usage still wins while the API sends both');
 assert(formatReset(reset, Date.parse(reset) - 65 * 60_000) === 'Resets in 1h 5m',
     'reset formatting');
 
