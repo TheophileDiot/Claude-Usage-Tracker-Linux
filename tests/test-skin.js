@@ -8,6 +8,7 @@ import {
     renderConfig,
     statuslineCommand,
     writeConfig,
+    writeUsageCache,
 } from '../skin.js';
 
 const SCHEMA_ID = 'org.gnome.shell.extensions.claude-usage-tracker';
@@ -103,8 +104,45 @@ assert(!GLib.file_test(missing, GLib.FileTest.EXISTS),
 GLib.setenv('CLAUDE_CONFIG_DIR', tmp, true);
 writeConfig(settings, 'Acme Inc');
 const written = GLib.build_filenamev([tmp, 'statusline-config.txt']);
+const cached = GLib.build_filenamev([tmp, '.statusline-usage-cache']);
 assert(GLib.file_test(written, GLib.FileTest.EXISTS),
     'writeConfig still projects into an existing Claude directory');
+
+// The skin's weekly component has no other source: Claude Code puts only
+// `five_hour` and `seven_day` on stdin, and the API now reports the weekly
+// window per model instead of as one all-models figure.
+const readCache = () => Object.fromEntries(new TextDecoder()
+    .decode(GLib.file_get_contents(cached)[1])
+    .split('\n')
+    .filter(line => line.includes('='))
+    .map(line => {
+        const index = line.indexOf('=');
+        return [line.slice(0, index), line.slice(index + 1)];
+    }));
+
+writeUsageCache([
+    {id: 'session', percent: 21, resetAt: '2026-08-18T11:20:00Z'},
+    {id: 'model:fable', percent: 3, resetAt: '2026-08-22T01:59:59Z'},
+], null);
+assert(readCache().UTILIZATION === '21', 'the cache carries the session window');
+assert(readCache().WEEKLY_UTILIZATION === '3',
+    'a model-scoped metric fills the weekly line when seven_day is gone');
+assert(readCache().WEEKLY_RESETS_AT === '2026-08-22T01:59:59Z',
+    'the model-scoped reset time comes along with it');
+
+writeUsageCache([
+    {id: 'weekly', percent: 40, resetAt: ''},
+    {id: 'model:fable', percent: 3, resetAt: ''},
+], null);
+assert(readCache().WEEKLY_UTILIZATION === '40',
+    'an all-models window still wins over the model-scoped fallback');
+
+// Neither writer may conjure a Claude directory into existence.
+GLib.setenv('CLAUDE_CONFIG_DIR', missing, true);
+writeUsageCache([{id: 'session', percent: 1, resetAt: ''}], null);
+assert(!GLib.file_test(missing, GLib.FileTest.EXISTS),
+    'writeUsageCache leaves a missing Claude directory alone');
+GLib.setenv('CLAUDE_CONFIG_DIR', tmp, true);
 
 // Everything the shell reads goes through the async path: `.claude.json` carries
 // Claude Code's project history and must never be parsed on the compositor
@@ -131,6 +169,7 @@ if (asyncError)
     throw asyncError;
 
 Gio.File.new_for_path(account).delete(null);
+Gio.File.new_for_path(cached).delete(null);
 Gio.File.new_for_path(written).delete(null);
 Gio.File.new_for_path(tmp).delete(null);
 

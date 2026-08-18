@@ -149,11 +149,17 @@ export function writeConfig(settings, profileName = '') {
  * Panel-sourced cache. Claude Code supplies rate limits on stdin, so this only
  * has to cover the start of a session and the extra-usage cost, which never
  * appears in the statusline payload.
+ *
+ * Weekly falls back to the first model-scoped metric. The API no longer fills
+ * the all-models `seven_day` window on every plan; it reports weekly limits per
+ * model in `limits[]` instead, and Claude Code's stdin payload carries only
+ * `five_hour` and `seven_day`, so this cache is the skin's only weekly source.
  */
 export function writeUsageCache(metrics, extra, now = Date.now()) {
     const find = id => metrics.find(item => item.id === id);
     const session = find('session');
-    const weekly = find('weekly');
+    const weekly = find('weekly') ??
+        metrics.find(item => item.id.startsWith('model:'));
     const lines = [`TIMESTAMP=${Math.floor(now / 1000)}`];
 
     if (session) {
@@ -171,7 +177,8 @@ export function writeUsageCache(metrics, extra, now = Date.now()) {
     }
 
     const directory = claudeDirectory();
-    GLib.mkdir_with_parents(directory, 0o700);
+    if (!GLib.file_test(directory, GLib.FileTest.IS_DIR))
+        return;
     const path = GLib.build_filenamev([directory, CACHE_FILE]);
     GLib.file_set_contents(path, `${lines.join('\n')}\n`);
     GLib.chmod(path, 0o600);

@@ -59,8 +59,11 @@ Two independent paths that meet only through files in `~/.claude` (or `$CLAUDE_C
   (`$XDG_STATE_HOME/claude-usage-tracker/history.json`), and the skin cache.
 - **Skin** — Claude Code pipes session JSON (including `rate_limits`) to `statusline.js` on
   stdin. It renders from stdin plus `statusline-config.txt`, falling back to
-  `.statusline-usage-cache` only for the start of a session and for extra-usage cost, which
-  never appears in the stdin payload.
+  `.statusline-usage-cache` for the start of a session, for extra-usage cost, and for weekly
+  usage. Claude Code's stdin `rate_limits` only ever carries `five_hour` and `seven_day`, and
+  the API no longer fills `seven_day` on every plan — it reports the weekly window per model in
+  `limits[]` — so `writeUsageCache()` falls back to the first `model:*` metric and the panel is
+  the skin's only weekly source.
 
 Files the extension writes, all `0600`: `~/.claude/statusline-config.txt`,
 `~/.claude/.statusline-usage-cache`, and the history JSON.

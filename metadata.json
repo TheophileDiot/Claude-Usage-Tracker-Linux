@@ -4,6 +4,6 @@
   "uuid": "claude-usage-tracker@theophilediot.github.io",
   "settings-schema": "org.gnome.shell.extensions.claude-usage-tracker",
   "url": "https://github.com/TheophileDiot/Claude-Usage-Tracker-Linux",
-  "version-name": "1.0.1",
+  "version-name": "1.0.2",
   "shell-version": ["46", "47", "48", "49", "50"]
 }
