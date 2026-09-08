@@ -3,7 +3,7 @@
 An unofficial Linux port of [Claude Usage Tracker](https://github.com/hamed-elfayome/Claude-Usage-Tracker) for macOS, combining its Claude Code statusline and visual direction with a GNOME Shell foundation adapted from [Claude Code Usage](https://github.com/Haletran/claude-usage-extension). It adds active model-specific limits, notifications, and a local 24-hour chart.
 
 ```
-my-project │ ⎇ main │ Opus 5 │ Ctx: 23% │ Usage: 34% ▓▓▓░░░░┃░░ → Reset: 11:48 AM
+my-project │ ⎇ main │ high │ Ctx: 23% │ Usage: 34% ▓▓▓░░░░┃░░ → Reset: 11:48 AM
 ```
 
 The `┃` is the pace marker: it sits at the elapsed position in the window, so the gap between it and the filled bar is the burn rate. Its color runs across six tiers of projected end-of-window usage — comfortable, on track, warming, pressing, critical, runaway.
@@ -76,7 +76,7 @@ Two optional `statusLine` fields are worth knowing about: `padding` adds horizon
 
 The Claude Code preferences page mirrors the macOS app's tab, with a live preview rendered by the skin itself:
 
-- **Components** — directory, git branch, model, profile, context (as a percentage or a token count).
+- **Components** — directory, git branch, effort level, profile, context (as a percentage or a token count). Effort appears when Claude Code reports it for the active model.
 - **Session usage** — progress bar, pace marker, pace marker colors, reset time.
 - **Weekly usage** — its own bar, pace marker, and reset time; plus extra-usage cost.
 - **Labels** — the `Ctx:`, `Usage:`, `Reset:`, and `Weekly:` prefixes, and 24-hour reset times.

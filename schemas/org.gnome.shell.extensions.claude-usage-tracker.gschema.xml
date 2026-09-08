@@ -71,7 +71,7 @@
     </key>
     <key name="statusline-show-model" type="b">
       <default>true</default>
-      <summary>Show model in the Claude Code skin</summary>
+      <summary>Show reasoning effort in the Claude Code skin</summary>
     </key>
     <key name="statusline-show-profile" type="b">
       <default>false</default>
@@ -179,7 +179,7 @@
     </key>
     <key name="statusline-element-color-model" type="s">
       <default>'#BBBB00'</default>
-      <summary>Per-element model colour</summary>
+      <summary>Per-element effort colour</summary>
     </key>
     <key name="statusline-element-color-profile" type="s">
       <default>'#BB00BB'</default>

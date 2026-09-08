@@ -6,11 +6,14 @@
  * A faithful port of the macOS tracker's `statusline-command.sh`, which the mac
  * app generates in StatuslineService.swift. Component order, glyphs, the
  * ten-level usage gradient, the six-tier pace marker and the four color modes
- * all match that script. Two deliberate differences:
+ * all match that script. Deliberate differences:
  *
  * - Usage comes from the `rate_limits` block Claude Code already puts on stdin,
  *   so no credential is injected into this file and no request is made.
  * - `NO_COLOR` suppresses reset sequences too, as the NO_COLOR spec requires.
+ * - `LINE_BREAK` can split the row before a configured segment.
+ * - The model segment shows reasoning effort from stdin `effort.level` instead.
+ *   SHOW_MODEL and ELEMENT_COLOR_MODEL keep their legacy config names.
  *
  * Reviewer note: this is the one non-GJS file in the extension. It remains
  * Node.js because Claude Code executes it as the configured statusline command,
@@ -375,9 +378,11 @@ function renderStatusline(data, options = {}) {
     }
 
     if (on(config, 'SHOW_MODEL')) {
-        const model = clean(data?.model?.display_name || data?.model?.id || '', 32);
-        if (model)
-            push('model', `${scheme.yellow}${model}${scheme.reset}`);
+        const effort = typeof data?.effort?.level === 'string'
+            ? clean(data.effort.level, 32).trim()
+            : '';
+        if (effort)
+            push('effort', `${scheme.yellow}${effort}${scheme.reset}`);
     }
 
     if (on(config, 'SHOW_PROFILE')) {

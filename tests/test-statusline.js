@@ -19,6 +19,7 @@ const config = overrides => ({...DEFAULTS, ...overrides});
 const session = {
     workspace: {current_dir: '/work/myproj'},
     model: {display_name: 'Opus 5'},
+    effort: {level: 'high'},
     context_window: {
         context_window_size: 200_000,
         used_percentage: 42,
@@ -42,14 +43,27 @@ const render = (data, options) => renderStatusline(data, {
     ...options,
 });
 
-// --- Default line matches the macOS statusline-command.sh output ------------
+// --- Default layout keeps the macOS order, with effort replacing model ------
 // 24% -> filled = (24*10+50)/100 = 2 blocks. 3h elapsed of 5h -> marker at
 // index 6. Context is derived from current_usage: 15500/200000 = 7%.
 assert.strictEqual(
     render(session),
-    'myproj │ ⎇ main │ Opus 5 │ Ctx: 7% │ Usage: 24% ▓▓░░░░┃░░░ → Reset: 08:00 PM',
-    'mac-exact default line'
+    'myproj │ ⎇ main │ high │ Ctx: 7% │ Usage: 24% ▓▓░░░░┃░░░ → Reset: 08:00 PM',
+    'default line shows effort in place of model'
 );
+
+for (const level of ['low', 'medium', 'high', 'xhigh', 'max'])
+    assert(render({...session, effort: {level}}).includes(`│ ${level} │`),
+        `${level} effort comes from the session payload`);
+for (const effort of [undefined, null, {}, {level: null}, {level: 5},
+    {level: {}}, {level: ''}, {level: ' \n '}]) {
+    const line = render({...session, effort});
+    assert.strictEqual(line,
+        'myproj │ ⎇ main │ Ctx: 7% │ Usage: 24% ▓▓░░░░┃░░░ → Reset: 08:00 PM',
+        'missing or invalid effort does not invent a value or restore the model');
+}
+assert(!render(session, {config: config({SHOW_MODEL: '0'})}).includes('│ high │'),
+    'the existing component toggle hides effort');
 
 // --- Component and label toggles -------------------------------------------
 assert.strictEqual(
@@ -62,19 +76,19 @@ assert.strictEqual(
             USE_24_HOUR_TIME: '1',
         }),
     }),
-    'myproj │ Opus 5 │ 7% │ 24% ▓▓░░░░┃░░░ → 20:00',
+    'myproj │ high │ 7% │ 24% ▓▓░░░░┃░░░ → 20:00',
     'labels off, branch hidden, 24-hour clock'
 );
 
 assert.strictEqual(
     render(session, {config: config({CONTEXT_AS_TOKENS: '1', SHOW_USAGE: '0'})}),
-    'myproj │ ⎇ main │ Opus 5 │ Ctx: 15K',
+    'myproj │ ⎇ main │ high │ Ctx: 15K',
     'context as tokens'
 );
 
 assert.strictEqual(
     render(session, {config: config({SHOW_PROGRESS_BAR: '0', SHOW_RESET_TIME: '0'})}),
-    'myproj │ ⎇ main │ Opus 5 │ Ctx: 7% │ Usage: 24%',
+    'myproj │ ⎇ main │ high │ Ctx: 7% │ Usage: 24%',
     'bar and reset time off'
 );
 
@@ -142,7 +156,7 @@ for (const [index, code] of gradient.entries()) {
 // --- Colour modes -----------------------------------------------------------
 const coloured = render(session, {colors: true});
 assert(coloured.includes('\x1b[0;34mmyproj') && coloured.includes('\x1b[0;32m⎇ main') &&
-    coloured.includes('\x1b[0;33mOpus 5') && coloured.includes('\x1b[0;90m │ '),
+    coloured.includes('\x1b[0;33mhigh') && coloured.includes('\x1b[0;90m │ '),
 'multi-colour uses the mac ANSI palette');
 
 // Greyscale drops colour but keeps the reset sequences, exactly as the mac
@@ -162,6 +176,8 @@ const perElement = render(session, {
 });
 assert(perElement.includes('\x1b[38;2;255;0;0mmyproj'), 'per-element directory colour');
 assert(perElement.includes('\x1b[38;2;0;187;0m⎇ main'), 'per-element branch default');
+assert(perElement.includes('\x1b[38;2;187;187;0mhigh'),
+    'effort inherits the former model colour');
 
 // Mac quirk: pace step colours are applied last, so they beat a custom pace
 // colour unless step colours are switched off.
@@ -182,11 +198,11 @@ assert.strictEqual(
 assert.strictEqual(render(session).includes('\n'), false, 'mac default is one line');
 assert.strictEqual(
     render(session, {config: config({LINE_BREAK: 'context'})}),
-    'myproj │ ⎇ main │ Opus 5\nCtx: 7% │ Usage: 24% ▓▓░░░░┃░░░ → Reset: 08:00 PM',
+    'myproj │ ⎇ main │ high\nCtx: 7% │ Usage: 24% ▓▓░░░░┃░░░ → Reset: 08:00 PM',
     'break before context splits identity from metrics'
 );
 assert(render(session, {config: config({LINE_BREAK: 'usage'})})
-    .startsWith('myproj │ ⎇ main │ Opus 5 │ Ctx: 7%\nUsage:'), 'break before usage');
+    .startsWith('myproj │ ⎇ main │ high │ Ctx: 7%\nUsage:'), 'break before usage');
 
 // --- Extra usage cost -------------------------------------------------------
 assert(render(session, {
@@ -237,8 +253,10 @@ assert.strictEqual(schemaKeys, Object.keys(DEFAULTS).length - 1,
 const hostile = render({
     workspace: {current_dir: '/tmp/\x1b[31mevil'},
     model: {display_name: 'Claude\nspoof'},
+    effort: {level: 'high\n\x1b\u202espoof'},
 }, {branch: 'main\x1b]8;;http://evil\x07'});
-assert(!hostile.includes('\x1b') && !hostile.includes('\nspoof'),
+assert(!hostile.includes('\x1b') && !hostile.includes('\nspoof') &&
+    !hostile.includes('\u202e') && hostile.includes('highspoof'),
     'terminal control sequences stripped from untrusted values');
 
 console.log('statusline checks passed');

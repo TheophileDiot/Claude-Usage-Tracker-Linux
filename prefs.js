@@ -377,12 +377,13 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
 
         const components = new Adw.PreferencesGroup({
             title: 'Components',
-            description: 'Rendered in order: directory, branch, model, profile, context, usage.',
+            description: 'Rendered in order: directory, branch, effort, profile, context, usage.',
         });
         page.add(components);
         components.add(switchRow(settings, 'statusline-show-directory', 'Directory'));
         components.add(switchRow(settings, 'statusline-show-branch', 'Git branch'));
-        components.add(switchRow(settings, 'statusline-show-model', 'Model'));
+        components.add(switchRow(settings, 'statusline-show-model', 'Effort level',
+            'Current reasoning effort reported by Claude Code'));
         components.add(switchRow(settings, 'statusline-show-profile', 'Profile',
             'Your Claude account or organisation name'));
         components.add(switchRow(settings, 'statusline-show-context', 'Context window'));
@@ -542,7 +543,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         for (const [key, title] of [
             ['statusline-element-color-dir', 'Directory'],
             ['statusline-element-color-branch', 'Git branch'],
-            ['statusline-element-color-model', 'Model'],
+            ['statusline-element-color-model', 'Effort level'],
             ['statusline-element-color-profile', 'Profile'],
             ['statusline-element-color-context', 'Context'],
             ['statusline-element-color-separator', 'Separator'],
@@ -593,7 +594,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         const sample = JSON.stringify({
             workspace: {current_dir: GLib.build_filenamev([GLib.get_home_dir(), 'my-project'])},
             worktree: {branch: 'main'},
-            model: {display_name: 'Opus 5'},
+            effort: {level: 'high'},
             context_window: {
                 context_window_size: 200_000,
                 current_usage: {
