@@ -254,6 +254,14 @@
     margin-right: 5px;
 }
 
+.cut-panel-readout {
+    spacing: 4px;
+}
+
+.cut-panel-period {
+    font-size: 10px;
+}
+
 .cut-panel-label {
     color: #f3f3f3;
     font-size: 12px;

@@ -17,6 +17,7 @@ import {
     hourlySeries,
     notificationTransition,
     normalizeUsage,
+    panelMetrics,
     sanitizeHistory,
 } from './usage.js';
 import {
@@ -142,22 +143,32 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         });
         this._panelBox.add_child(this._icon);
 
-        // Without an explicit alignment the box layout fills the cross axis, so the
-        // track grows to the panel height instead of the 9px the stylesheet asks for.
-        this._panelProgress = new St.Widget({
-            style_class: 'cut-panel-progress',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
-        this._panelProgressFill = new St.Widget({style_class: 'cut-panel-progress-fill'});
-        this._panelProgress.add_child(this._panelProgressFill);
-        this._panelBox.add_child(this._panelProgress);
+        this._panelReadouts = Array.from({length: 2}, () => {
+            const box = new St.BoxLayout({style_class: 'cut-panel-readout'});
+            const period = new St.Label({
+                y_align: Clutter.ActorAlign.CENTER,
+                style_class: 'cut-panel-period',
+            });
+            box.add_child(period);
 
-        this._panelLabel = new St.Label({
-            text: '—',
-            y_align: Clutter.ActorAlign.CENTER,
-            style_class: 'cut-panel-label',
+            // Center the track so it stays 9px tall instead of filling the panel.
+            const progress = new St.Widget({
+                style_class: 'cut-panel-progress',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            const fill = new St.Widget({style_class: 'cut-panel-progress-fill'});
+            progress.add_child(fill);
+            box.add_child(progress);
+
+            const label = new St.Label({
+                text: '—',
+                y_align: Clutter.ActorAlign.CENTER,
+                style_class: 'cut-panel-label',
+            });
+            box.add_child(label);
+            this._panelBox.add_child(box);
+            return {box, period, progress, fill, label};
         });
-        this._panelBox.add_child(this._panelLabel);
         this.add_child(this._panelBox);
     }
 
@@ -369,7 +380,7 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         this._errorBox.show();
         this._setState(this._lastMetrics.length ? 'Showing cached data' : 'Usage unavailable', 'stale');
         if (!this._lastMetrics.length)
-            this._panelLabel.text = '—';
+            this._updatePanel();
         this._setLoading(false);
     }
 
@@ -444,34 +455,44 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
     }
 
     _updatePanel() {
-        const metric = this._lastMetrics.find(item => item.id === 'session') ||
-            this._lastMetrics.find(item => item.id === 'weekly') ||
-            this._lastMetrics[0];
-        if (!metric) {
-            this._panelLabel.text = '—';
-            this._panelProgressFill.set_width(0);
-            return;
-        }
-
-        const value = this._displayValue(metric);
-        this._panelLabel.text = `${Math.round(value)}%`;
-        this._panelProgressFill.set_width(Math.round(
-            PANEL_TRACK_WIDTH * this._themeContext.scale_factor * value / 100));
-        for (const actor of [this._panelLabel, this._panelProgressFill]) {
-            for (const name of ['usage-safe', 'usage-moderate', 'usage-critical'])
-                actor.remove_style_class_name(name);
-            actor.add_style_class_name(`usage-${metric.level}`);
-        }
+        const metrics = panelMetrics(this._lastMetrics);
         const kind = this._settings.get_string('percentage-mode') === 'remaining'
             ? 'remaining'
             : 'used';
-        this.accessible_name = `Claude usage, ${Math.round(value)} percent ${kind}`;
+        const descriptions = [];
+        this._panelReadouts.forEach(({box, period, fill, label}, index) => {
+            const metric = metrics[index];
+            box.visible = Boolean(metric) || index === 0;
+            period.text = metric?.id === 'session' ? '5h'
+                : metric?.id === 'weekly' || metric?.id.startsWith('model:') ? '7d' : '';
+            period.visible = period.text !== '';
+            const value = metric ? this._displayValue(metric) : 0;
+            label.text = metric ? `${Math.round(value)}%` : '—';
+            fill.set_width(Math.round(
+                PANEL_TRACK_WIDTH * this._themeContext.scale_factor * value / 100));
+            for (const actor of [label, fill]) {
+                for (const name of ['usage-safe', 'usage-moderate', 'usage-critical'])
+                    actor.remove_style_class_name(name);
+                if (metric)
+                    actor.add_style_class_name(`usage-${metric.level}`);
+            }
+            if (metric) {
+                const title = metric.id === 'session' ? '5-hour usage'
+                    : metric.tag ? `${metric.tag} ${metric.title}` : metric.title;
+                descriptions.push(`${title}, ${Math.round(value)} percent ${kind}`);
+            }
+        });
+        this.accessible_name = descriptions.length
+            ? `Claude usage, ${descriptions.join('; ')}`
+            : 'Claude usage unavailable';
     }
 
     _updatePanelMode() {
         const mode = this._settings.get_string('display-mode');
-        this._panelProgress.visible = mode === 'bar' || mode === 'both';
-        this._panelLabel.visible = mode === 'text' || mode === 'both';
+        for (const {progress, label} of this._panelReadouts) {
+            progress.visible = mode === 'bar' || mode === 'both';
+            label.visible = mode === 'text' || mode === 'both';
+        }
         this._updatePanel();
     }
 

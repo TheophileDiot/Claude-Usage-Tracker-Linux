@@ -9,7 +9,7 @@ The popup keeps the compact dark quota-card hierarchy of the original macOS trac
 - GNOME typography and text scaling are inherited; no bundled fonts or web UI runtime.
 - Preferences use native Libadwaita rows and controls.
 
-The top panel stays deliberately compact: optional icon plus text, progress bar, or both. Dynamic API limits become cards without changing the fixed shell layout.
+The top panel stays deliberately compact: optional icon plus separate `5h` and `7d` readouts, each using text, a progress bar, or both. Both follow the used/remaining setting and retain their window labels in bar-only mode. Weekly prefers the all-models limit and otherwise uses the first model-scoped weekly limit, matching the skin cache; its accessible description names the model. Missing limits are omitted, and cached values remain visible on refresh failures. Dynamic API limits become cards without changing the fixed shell layout.
 
 The Claude Code skin reproduces the macOS statusline: a single row of `directory │ ⎇ branch │ model │ profile │ Ctx: n% │ Usage: n% ▓▓┃░░ → Reset: 4:15 PM`, with weekly and extra-usage segments available. Usage carries a ten-level gradient and a pace marker — a `┃` at the elapsed-time position whose distance from the fill edge shows burn rate, colored across six projected-usage tiers. Four color modes match the mac app: Multi-Color, Greyscale, Single Color, and Per Element. `NO_COLOR` disables decoration entirely.
 

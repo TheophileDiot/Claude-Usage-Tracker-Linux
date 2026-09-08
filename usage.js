@@ -193,6 +193,15 @@ export function normalizeUsage(payload) {
     return result;
 }
 
+/** Keep the panel compact, using the skin's first-model fallback for weekly. */
+export function panelMetrics(metrics) {
+    const session = metrics.find(item => item.id === 'session');
+    const weekly = metrics.find(item => item.id === 'weekly') ??
+        metrics.find(item => item.id.startsWith('model:'));
+    const selected = [session, weekly].filter(Boolean);
+    return selected.length ? selected : metrics.slice(0, 1);
+}
+
 export function formatReset(value, now = Date.now()) {
     const target = Date.parse(value);
     if (!Number.isFinite(target))

@@ -4,6 +4,7 @@ import {
     hourlySeries,
     normalizeUsage,
     notificationTransition,
+    panelMetrics,
     sanitizeHistory,
 } from '../usage.js';
 
@@ -45,6 +46,21 @@ assert(metrics.map(item => item.id).join(',') ===
     'session,weekly,model:opus,model:fable,extra', 'metric order and visibility');
 assert(metrics[0].percent === 42, 'dynamic session overrides legacy field');
 assert(metrics[1].percent === 55, 'dynamic weekly supports null seven_day');
+assert(panelMetrics(metrics).map(item => item.id).join(',') === 'session,weekly',
+    'panel shows both session and overall weekly limits');
+assert(panelMetrics(metrics.filter(item => item.id !== 'weekly'))
+    .map(item => item.id).join(',') === 'session,model:opus',
+    'panel falls back to the first model weekly limit');
+assert(panelMetrics([metrics[1]]).length === 1,
+    'weekly-only data appears once without an invented session');
+const zeroModel = {id: 'model:opus', percent: 0};
+assert(panelMetrics([metrics[0], zeroModel])[1] === zeroModel,
+    'an available weekly limit at zero percent stays visible');
+assert(panelMetrics([metrics[0]]).length === 1,
+    'missing weekly data does not invent a limit');
+assert(panelMetrics([]).length === 0, 'empty data leaves the panel unavailable');
+assert(panelMetrics([metrics.at(-1)])[0].id === 'extra',
+    'panel preserves its fallback when only another limit is available');
 assert(metrics.find(item => item.id === 'extra').subtitle === '1.86 / 5.00 USD',
     'extra usage money formatting');
 const wholeCurrency = normalizeUsage({
