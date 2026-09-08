@@ -107,4 +107,14 @@ Files written, all `0600`:
   extension API it uses changed across those releases, but 47-50 are untested;
   please open an issue if something misbehaves there.
 
+## Related projects
+
+If you also use Codex, see
+[Codex Usage Monitor](https://github.com/TheophileDiot/Codex-Usage-Tracker-Linux)
+for account quotas, activity and recent sessions in your GNOME panel, plus a native
+footer editor.
+
+For a self-hosted Grafana view across coding tools, see
+[AI CLI Observability](https://github.com/TheophileDiot/ai-cli-observability).
+
 This project is unofficial and is not affiliated with or endorsed by Anthropic. See [NOTICE](NOTICE) for upstream attribution.
