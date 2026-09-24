@@ -101,7 +101,7 @@ Files written, all `0600`:
 
 ## Limit resets
 
-The terminal button in the popup header runs `claude /limit-reset` in a terminal. Claude Code checks whether you have a reset, and asks you to confirm before it uses one. Anthropic's reset endpoint only accepts requests from Claude Code, so the extension cannot show or use resets itself. On an account without resets, Claude Code reports that none is available or that the command is unknown.
+The reset button in the popup header (the revert arrow, labelled “Use a limit reset in Claude Code” on hover) runs `claude /limit-reset` in a terminal. Claude Code checks whether you have a reset, and asks you to confirm before it uses one. Anthropic's reset endpoint only accepts requests from Claude Code, so the extension cannot show or use resets itself. On an account without resets, Claude Code reports that none is available or that the command is unknown.
 
 The button uses the first terminal it finds: `xdg-terminal-exec`, Ptyxis, Console, GNOME Terminal, then `x-terminal-emulator`. Claude Code starts in `$CLAUDE_CONFIG_DIR` or `~/.claude`, so it asks whether you trust that folder the first time only. Your home folder would ask on every click, because Claude Code never remembers trust for it.
 

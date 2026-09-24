@@ -5,7 +5,7 @@ The popup keeps the compact dark quota-card hierarchy of the original macOS trac
 - 310 px popover with account and freshness state first, then quota cards and the 24-hour chart.
 - Near-black `#111412` surface, Claude orange `#f28c28`, and green/amber/red quota states.
 - Percentage text always accompanies color; reset times and stale/error states remain explicit.
-- Header actions are keyboard-focusable icon buttons with accessible names: refresh, use a limit reset (opens `claude /limit-reset` in a terminal), and settings.
+- Header actions are keyboard-focusable icon buttons with accessible names and hover tooltips: refresh, use a limit reset (revert icon; opens `claude /limit-reset` in a terminal), and settings.
 - GNOME typography and text scaling are inherited; no bundled fonts or web UI runtime.
 - Preferences use native Libadwaita rows and controls.
 

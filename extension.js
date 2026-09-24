@@ -62,6 +62,28 @@ function iconButton(iconName, label) {
         can_focus: true,
         accessible_name: label,
     });
+
+    // St has no tooltips. The Dash's hover label is the Shell's own look for
+    // one; it lives in uiGroup so the popup cannot clip it.
+    const tooltip = new St.Label({text: label, style_class: 'dash-label', visible: false});
+    Main.uiGroup.add_child(tooltip);
+    const sync = () => {
+        if (!button.hover || !button.mapped) {
+            tooltip.hide();
+            return;
+        }
+        tooltip.show();
+        Main.uiGroup.set_child_above_sibling(tooltip, null);
+        const [x, y] = button.get_transformed_position();
+        const [width, height] = button.get_transformed_size();
+        tooltip.set_position(
+            Math.clamp(Math.floor(x + (width - tooltip.width) / 2),
+                0, global.stage.width - tooltip.width),
+            Math.floor(y + height + 6));
+    };
+    button.connect('notify::hover', sync);
+    button.connect('notify::mapped', sync);
+    button.connect('destroy', () => tooltip.destroy());
     return [button, icon];
 }
 
@@ -214,7 +236,7 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         actions.add_child(this._refreshButton);
 
         const [resetButton] = iconButton(
-            'utilities-terminal-symbolic',
+            'document-revert-symbolic',
             'Use a limit reset in Claude Code'
         );
         resetButton.connect('clicked', () => {
