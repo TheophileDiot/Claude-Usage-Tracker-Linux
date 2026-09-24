@@ -19,9 +19,11 @@ import {
     normalizeUsage,
     panelMetrics,
     sanitizeHistory,
+    terminalArgv,
 } from './usage.js';
 import {
     SKIN_KEYS,
+    claudeDirectory,
     loadTextAsync,
     readAccountLabelAsync,
     writeConfig,
@@ -211,6 +213,16 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         this._refreshButton.connect('clicked', () => this._refreshUsage());
         actions.add_child(this._refreshButton);
 
+        const [resetButton] = iconButton(
+            'utilities-terminal-symbolic',
+            'Use a limit reset in Claude Code'
+        );
+        resetButton.connect('clicked', () => {
+            this.menu.close();
+            this._openLimitReset();
+        });
+        actions.add_child(resetButton);
+
         const [settingsButton] = iconButton('preferences-system-symbolic', 'Open settings');
         settingsButton.connect('clicked', () => {
             this.menu.close();
@@ -247,6 +259,39 @@ class ClaudeUsageIndicator extends PanelMenu.Button {
         scroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
         scroll.add_child(this._dashboard);
         this._content.add_child(scroll);
+    }
+
+    /**
+     * The reset endpoint only answers Claude Code itself, which also checks
+     * eligibility and asks before spending a reset, so the panel just opens it.
+     * A GNOME session's PATH often lacks ~/.local/bin, where the installer puts
+     * `claude`, hence the fallback. It starts in the Claude directory because
+     * Claude Code never remembers trust for the home directory, the shell's cwd,
+     * and would ask on every click.
+     */
+    _openLimitReset() {
+        const installed = GLib.build_filenamev([GLib.get_home_dir(), '.local', 'bin', 'claude']);
+        const claude = GLib.find_program_in_path('claude') ??
+            (GLib.file_test(installed, GLib.FileTest.IS_EXECUTABLE) ? installed : null);
+        if (!claude) {
+            this._notify('Claude Code was not found. Install it to use a limit reset.');
+            return;
+        }
+
+        const argv = terminalArgv([claude, '/limit-reset'],
+            name => GLib.find_program_in_path(name));
+        if (!argv) {
+            this._notify('No terminal was found. Run claude /limit-reset in one.');
+            return;
+        }
+
+        const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.NONE});
+        launcher.set_cwd(claudeDirectory());
+        try {
+            launcher.spawnv(argv);
+        } catch (error) {
+            this._notify(`The terminal could not be opened: ${error.message}`);
+        }
     }
 
     _credentialPaths() {

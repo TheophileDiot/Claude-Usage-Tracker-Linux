@@ -32,6 +32,7 @@ Runs as a Claude Code statusline and a GNOME Shell extension. The statusline use
 - GNOME Shell 46 is the development and test target; 47 through 51 are declared but untested.
 - Two-line Claude Code skin with directory, branch, effort, profile, context tokens, 5-hour/7-day limits, reset countdowns, and extra-usage percentage.
 - Read-only OAuth credentials; expired credentials send the user back to `claude auth login`.
+- Usage-limit resets are used through Claude Code: a header action opens `claude /limit-reset` in a terminal. The extension never calls the reset endpoint, which rejects clients other than Claude Code.
 - Seven days of local percentage-only history, visualized as a 24-hour mini chart.
 - No browser login, multi-profile switching, API Console billing, activity HUD, updater, localization, or telemetry.
 

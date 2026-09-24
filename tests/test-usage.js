@@ -6,6 +6,7 @@ import {
     notificationTransition,
     panelMetrics,
     sanitizeHistory,
+    terminalArgv,
 } from '../usage.js';
 
 function assert(condition, message) {
@@ -139,6 +140,15 @@ transition = notificationTransition(transition.state, {
 }, [75, 90, 95]);
 assert(transition.threshold === null && transition.state.lastThreshold === 75,
     'new window rearms without startup noise');
+
+const installed = {'gnome-terminal': '/usr/bin/gnome-terminal', 'xdg-terminal-exec': '/usr/bin/xdg-terminal-exec'};
+const find = name => installed[name] ?? null;
+assert(terminalArgv(['claude', '/limit-reset'], find).join(' ') ===
+    '/usr/bin/xdg-terminal-exec claude /limit-reset', 'xdg-terminal-exec wins, no separator');
+delete installed['xdg-terminal-exec'];
+assert(terminalArgv(['claude', '/limit-reset'], find).join(' ') ===
+    '/usr/bin/gnome-terminal -- claude /limit-reset', 'GNOME terminals take --');
+assert(terminalArgv(['claude'], () => null) === null, 'no terminal installed');
 
 let failed = false;
 try {

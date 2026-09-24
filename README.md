@@ -1,6 +1,6 @@
 # Claude Usage Tracker for Linux
 
-An unofficial Linux port of [Claude Usage Tracker](https://github.com/hamed-elfayome/Claude-Usage-Tracker) for macOS, combining its Claude Code statusline and visual direction with a GNOME Shell foundation adapted from [Claude Code Usage](https://github.com/Haletran/claude-usage-extension). It adds active model-specific limits, notifications, and a local 24-hour chart.
+An unofficial Linux port of [Claude Usage Tracker](https://github.com/hamed-elfayome/Claude-Usage-Tracker) for macOS, combining its Claude Code statusline and visual direction with a GNOME Shell foundation adapted from [Claude Code Usage](https://github.com/Haletran/claude-usage-extension). It adds active model-specific limits, notifications, a local 24-hour chart, and a shortcut to Claude Code's usage-limit resets.
 
 ```
 my-project │ ⎇ main │ high │ Ctx: 23% │ Usage: 34% ▓▓▓░░░░┃░░ → Reset: 11:48 AM
@@ -99,12 +99,18 @@ Files written, all `0600`:
 - `~/.claude/statusline-config.txt` — skin settings, projected from preferences.
 - `~/.claude/.statusline-usage-cache` — last panel refresh, so the skin can show extra-usage cost and cover the start of a session.
 
+## Limit resets
+
+The terminal button in the popup header runs `claude /limit-reset` in a terminal. Claude Code checks whether you have a reset, and asks you to confirm before it uses one. Anthropic's reset endpoint only accepts requests from Claude Code, so the extension cannot show or use resets itself. On an account without resets, Claude Code reports that none is available or that the command is unknown.
+
+The button uses the first terminal it finds: `xdg-terminal-exec`, Ptyxis, Console, GNOME Terminal, then `x-terminal-emulator`. Claude Code starts in `$CLAUDE_CONFIG_DIR` or `~/.claude`, so it asks whether you trust that folder the first time only. Your home folder would ask on every click, because Claude Code never remembers trust for it.
+
 ## Troubleshooting
 
 - “Credentials not found/expired”: run `claude auth login`.
 - Cached values remain visible during network or service failures.
-- Developed and tested on GNOME Shell 46. It declares 46-50 because no breaking
-  extension API it uses changed across those releases, but 47-50 are untested;
+- Developed and tested on GNOME Shell 46. It declares 46-51 because no breaking
+  extension API it uses changed across those releases, but 47-51 are untested;
   please open an issue if something misbehaves there.
 
 ## Related projects

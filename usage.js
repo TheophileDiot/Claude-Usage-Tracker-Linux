@@ -294,3 +294,26 @@ export function notificationTransition(state, sessionMetric, enabledThresholds) 
         },
     };
 }
+
+/**
+ * Terminals tried in order: the xdg-terminal-exec spec, then GNOME's own and
+ * Debian's alternatives link. Each entry carries the argument that ends its own
+ * options, so `command` reaches the terminal verbatim.
+ */
+const TERMINALS = [
+    ['xdg-terminal-exec'],
+    ['ptyxis', '--'],
+    ['kgx', '--'],
+    ['gnome-terminal', '--'],
+    ['x-terminal-emulator', '-e'],
+];
+
+/** argv that runs `command` in the first installed terminal, or null if none is. */
+export function terminalArgv(command, findProgram) {
+    for (const [name, ...separator] of TERMINALS) {
+        const path = findProgram(name);
+        if (path)
+            return [path, ...separator, ...command];
+    }
+    return null;
+}
