@@ -1,0 +1,23 @@
+DESIGN.md
+  s_cde2f7a28e44d8::t_e538082c01f47b 8
+extension.js
+  s_cde2f7a28e44d8::t_e538082c01f47b 65-86,239
+README.md
+  s_cde2f7a28e44d8::t_e538082c01f47b 104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "74d3b17e9c9cc5ff6d0089525d695ba08ad7d02a",
+  "prompts": {},
+  "sessions": {
+    "s_cde2f7a28e44d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ec2a3fc-9aa0-4caa-a3fc-ec2f6ef9c2bd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
