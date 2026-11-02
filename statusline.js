@@ -12,11 +12,12 @@
  *   so no credential is injected into this file and no request is made.
  * - `NO_COLOR` suppresses reset sequences too, as the NO_COLOR spec requires.
  * - `LINE_BREAK` can split the row before a configured segment.
+ * - `WRAP_TO_WIDTH` optionally wraps whole segments at terminal `COLUMNS`.
  * - The model segment shows reasoning effort from stdin `effort.level` instead.
  *   SHOW_MODEL and ELEMENT_COLOR_MODEL keep their legacy config names.
  *
- * Reviewer note: this is the one non-GJS file in the extension. It remains
- * Node.js because Claude Code executes it as the configured statusline command,
+ * Reviewer note: this is the one non-GJS file in the extension. It requires
+ * Node.js 22 or newer: Claude Code executes it as the configured statusline command,
  * outside GNOME Shell — the extension never interprets this file. It is plain
  * readable source, ships under the same MIT license as
  * the rest of the extension (see LICENSE), installs no packages, makes no
@@ -31,6 +32,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const {spawnSync} = require('child_process');
+const {stripVTControlCharacters} = require('util');
 
 const SESSION_WINDOW_SECONDS = 5 * 60 * 60;
 const WEEKLY_WINDOW_SECONDS = 7 * 24 * 60 * 60;
@@ -87,6 +89,7 @@ const DEFAULTS = {
     SHOW_WEEKLY_LABEL: '1',
     SHOW_EXTRA_USAGE: '0',
     LINE_BREAK: 'none',
+    WRAP_TO_WIDTH: '0',
     COLOR_MODE: 'colored',
     SINGLE_COLOR: '#00BFFF',
     ELEMENT_COLOR_DIR: '#0000EE',
@@ -318,7 +321,7 @@ function readProfile() {
     for (const candidate of candidates) {
         try {
             const account = JSON.parse(fs.readFileSync(candidate, 'utf8')).oauthAccount;
-            const label = account?.organizationName || account?.displayName || account?.email;
+            const label = account?.organizationName || account?.displayName || account?.emailAddress;
             if (label)
                 return clean(label, 32);
         } catch (_error) {
@@ -371,8 +374,7 @@ function renderStatusline(data, options = {}) {
     }
 
     if (on(config, 'SHOW_BRANCH')) {
-        const branch = clean(options.branch ?? data?.worktree?.branch ??
-            data?.workspace?.git_worktree ?? '', 48);
+        const branch = clean(options.branch ?? data?.worktree?.branch ?? '', 48);
         if (branch)
             push('branch', `${scheme.green}⎇ ${branch}${scheme.reset}`);
     }
@@ -402,7 +404,7 @@ function renderStatusline(data, options = {}) {
         // The mac script derives the percentage from current_usage; used_percentage
         // covers responses that omit the token breakdown.
         const value = Number.isFinite(size) && size > 0 && tokens > 0
-            ? Math.floor(tokens * 100 / size)
+            ? percent(Math.floor(tokens * 100 / size))
             : fallback;
 
         if (value !== null) {
@@ -483,14 +485,19 @@ function renderStatusline(data, options = {}) {
         }
     }
 
-    // A break before the named segment splits the row there; 'none' is the
-    // single line the mac app renders.
+    const columns = on(config, 'WRAP_TO_WIDTH') && /^[1-9]\d*$/.test(process.env.COLUMNS ?? '')
+        ? Number(process.env.COLUMNS) : 0;
+    // shortcut: width counts code points, use terminal-cell measurement if wide glyphs are needed.
+    const width = text => [...stripVTControlCharacters(text)].length;
+    let rowWidth = 0;
     return segments.reduce((rows, segment, index) => {
-        if (index === 0)
-            return segment.text;
-        return segment.id === config.LINE_BREAK
-            ? `${rows}\n${segment.text}`
-            : `${rows}${separator}${segment.text}`;
+        const segmentWidth = width(segment.text);
+        const lineBreak = index > 0 && (segment.id === config.LINE_BREAK ||
+            (columns > 0 && rowWidth + width(separator) + segmentWidth > columns));
+        rowWidth = index === 0 || lineBreak
+            ? segmentWidth : rowWidth + width(separator) + segmentWidth;
+        return index === 0 ? segment.text
+            : `${rows}${lineBreak ? '\n' : separator}${segment.text}`;
     }, '');
 }
 
@@ -500,8 +507,7 @@ function main() {
         const cwdValue = data?.workspace?.current_dir || data?.cwd;
         const cwd = typeof cwdValue === 'string' ? cwdValue : '';
         process.stdout.write(`${renderStatusline(data, {
-            branch: data?.worktree?.branch || findBranch(cwd) ||
-                data?.workspace?.git_worktree,
+            branch: data?.worktree?.branch || findBranch(cwd),
             profile: readProfile(),
             cache: readCache(),
         })}\n`);

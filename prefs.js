@@ -10,10 +10,18 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
 import {
     SKIN_KEYS,
     claudeDirectory,
+    historyPath,
     readAccountLabelAsync,
     statuslineCommand,
     writeConfig,
+    writeTextAsync,
 } from './skin.js';
+import {
+    historyToCsv,
+    parseHistory,
+    parseThresholdList,
+    windowRecords,
+} from './usage.js';
 
 const SETTINGS_FILE = 'settings.json';
 
@@ -50,7 +58,7 @@ function isInstalled(extensionPath) {
  * of the previous settings.json. Returns the backup path, or null when the file
  * did not exist yet.
  */
-function install(extensionPath) {
+function install(extensionPath, refreshInterval) {
     const path = settingsPath();
     const text = readText(path);
     let backup = null;
@@ -66,6 +74,8 @@ function install(extensionPath) {
     // cannot parse would discard configuration we never read.
     const settings = text === null ? {} : JSON.parse(text);
     settings.statusLine = {type: 'command', command: statuslineCommand(extensionPath)};
+    if (refreshInterval > 0)
+        settings.statusLine.refreshInterval = refreshInterval;
 
     GLib.mkdir_with_parents(claudeDirectory(), 0o700);
     GLib.file_set_contents(path, `${JSON.stringify(settings, null, 2)}\n`);
@@ -239,12 +249,98 @@ function overrideColorRow(settings, key, title, subtitle, fallback) {
     return row;
 }
 
+const SHORTCUTS = [
+    ['shortcut-toggle-menu', 'Open or close the popup', 'Shows the usage popup from anywhere'],
+    ['shortcut-refresh', 'Refresh usage', 'Same as the refresh button'],
+    ['shortcut-open-prefs', 'Open preferences', 'Same as the settings button'],
+];
+
+/** The accelerator is captured here, not typed: Escape cancels, Backspace clears. */
+function captureShortcut(window, settings, key, title) {
+    const dialog = new Adw.AlertDialog({
+        heading: title,
+        body: 'Press the new shortcut, with Ctrl, Alt or Super held. Backspace clears it, Escape cancels.',
+    });
+    dialog.add_response('cancel', 'Cancel');
+    dialog.set_close_response('cancel');
+
+    const controller = new Gtk.EventControllerKey({
+        propagation_phase: Gtk.PropagationPhase.CAPTURE,
+    });
+    controller.connect('key-pressed', (_controller, keyval, _keycode, state) => {
+        const mask = state & Gtk.accelerator_get_default_mod_mask();
+        if (mask === 0 && keyval === Gdk.KEY_Escape) {
+            dialog.close();
+        } else if (mask === 0 && keyval === Gdk.KEY_BackSpace) {
+            settings.set_strv(key, []);
+            dialog.close();
+        } else {
+            const lower = Gdk.keyval_to_lower(keyval);
+            // A bare letter or Shift+letter as a global binding would swallow typing.
+            if (Gtk.accelerator_valid(lower, mask) && (mask & ~Gdk.ModifierType.SHIFT_MASK)) {
+                const accelerator = Gtk.accelerator_name(lower, mask);
+                for (const [other] of SHORTCUTS) {
+                    if (other !== key && settings.get_strv(other)[0] === accelerator)
+                        settings.set_strv(other, []);
+                }
+                settings.set_strv(key, [accelerator]);
+                dialog.close();
+            }
+        }
+        return Gdk.EVENT_STOP;
+    });
+    dialog.add_controller(controller);
+    dialog.present(window);
+}
+
+/** `track` receives each settings handler id so the window can disconnect them. */
+function shortcutRow(window, settings, [key, title, subtitle], track) {
+    const row = new Adw.ActionRow({title, subtitle});
+    const label = new Gtk.ShortcutLabel({
+        accelerator: settings.get_strv(key)[0] ?? '',
+        disabled_text: 'Not set',
+        valign: Gtk.Align.CENTER,
+    });
+    track(settings.connect(`changed::${key}`, () => {
+        label.accelerator = settings.get_strv(key)[0] ?? '';
+    }));
+    const button = new Gtk.Button({label: 'Set…', valign: Gtk.Align.CENTER});
+    button.connect('clicked', () => captureShortcut(window, settings, key, title));
+    row.add_suffix(label);
+    row.add_suffix(button);
+    return row;
+}
+
+/**
+ * Preferences runs in its own process, so a synchronous read is fine. The clear
+ * cutoff is applied here too: the extension may be off and the file untouched.
+ */
+function readHistory(settings) {
+    let text = null;
+    try {
+        text = readText(historyPath());
+    } catch (_error) {
+        // Unreadable reads as empty.
+    }
+    return parseHistory(text, settings.get_int64('history-cleared-at')).history;
+}
+
+function windowText(record) {
+    const at = ms => GLib.DateTime.new_from_unix_local(Math.floor(ms / 1000));
+    const start = at(record.start);
+    const end = at(record.end);
+    const sameDay = start.format('%F') === end.format('%F');
+    return `${start.format('%b %-d, %H:%M')} – ${end.format(sameDay ? '%H:%M' : '%b %-d, %H:%M')}`;
+}
+
 export default class ClaudeUsagePreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
+        this._handlerIds = [];
         window.set_default_size(640, 760);
-        this._buildPanelPage(window, settings);
+        const barColorModeId = this._buildPanelPage(window, settings);
         const colorModeId = this._buildSkinPage(window, settings);
+        this._buildHistoryPage(window, settings);
 
         // The skin reads a file, not GSettings, so every change is projected out.
         // The preview renders the real file, so it has to wait for the write.
@@ -253,8 +349,12 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
                 this._writeSkinConfig(settings).then(() => this._refreshPreview());
         });
         window.connect('close-request', () => {
+            for (const id of this._handlerIds)
+                settings.disconnect(id);
+            this._handlerIds = [];
             settings.disconnect(changedId);
             settings.disconnect(colorModeId);
+            settings.disconnect(barColorModeId);
             this._stopPreview();
             this._preview = null;
         });
@@ -269,6 +369,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         }
     }
 
+    /** Returns the settings handler id the caller has to disconnect. */
     _buildPanelPage(window, settings) {
         const page = new Adw.PreferencesPage({
             title: 'Panel',
@@ -302,6 +403,49 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
             'Show quota already used or still remaining',
             [['used', 'Used'], ['remaining', 'Remaining']]
         ));
+        general.add(comboRow(
+            settings,
+            'reset-display',
+            'Reset time',
+            'Time left, the clock time of the reset, or both',
+            [['relative', 'Time left'], ['absolute', 'Clock time'], ['both', 'Both']]
+        ));
+        general.add(comboRow(
+            settings,
+            'time-format',
+            'Clock format',
+            'For clock times of resets; System follows GNOME',
+            [['system', 'System'], ['12h', '12-hour'], ['24h', '24-hour']]
+        ));
+
+        const bars = new Adw.PreferencesGroup({
+            title: 'Bars',
+            description: 'Colours and the pace marker on panel and popup bars.',
+        });
+        page.add(bars);
+        bars.add(switchRow(settings, 'show-pace-marker', 'Pace marker',
+            'A tick at the elapsed share of the window, coloured by projected usage'));
+        bars.add(comboRow(
+            settings,
+            'bar-color-basis',
+            'Colour by',
+            'Pace projects usage to the end of the window once 15% of it has passed',
+            [['usage', 'Usage'], ['pace', 'Pace']]
+        ));
+        bars.add(comboRow(
+            settings,
+            'bar-color-mode',
+            'Colour mode',
+            'Green, amber and red at 70% and 90%, or one colour for every bar',
+            [['levels', 'Levels'], ['single', 'Single colour']]
+        ));
+        const single = colorRow(settings, 'single-color', 'Single colour');
+        bars.add(single);
+        const syncSingle = () => {
+            single.sensitive = settings.get_string('bar-color-mode') === 'single';
+        };
+        const barColorModeId = settings.connect('changed::bar-color-mode', syncSingle);
+        syncSingle();
 
         const panel = new Adw.PreferencesGroup({
             title: 'Top panel',
@@ -324,6 +468,26 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         ));
         panel.add(switchRow(settings, 'show-icon', 'Show icon',
             'Keep the tracker mark beside the usage value'));
+        panel.add(switchRow(settings, 'panel-show-countdown', 'Reset countdown',
+            'Add the time left, such as 2h or 45m, to the 5h readout'));
+
+        const service = new Adw.PreferencesGroup({
+            title: 'Service status',
+            description: 'Optional popup row for status.claude.com.',
+        });
+        page.add(service);
+        service.add(switchRow(settings, 'show-claude-status', 'Show Claude status',
+            'Requests status.claude.com every 5 minutes while on, with no login or cookies. Off sends nothing.'));
+
+        const shortcuts = new Adw.PreferencesGroup({
+            title: 'Shortcuts',
+            description: 'Global keyboard shortcuts. None are set by default.',
+        });
+        page.add(shortcuts);
+        for (const shortcut of SHORTCUTS) {
+            shortcuts.add(shortcutRow(window, settings, shortcut,
+                id => this._handlerIds.push(id)));
+        }
 
         const notifications = new Adw.PreferencesGroup({
             title: 'Notifications',
@@ -342,12 +506,162 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
             notifications.add(row);
         }
 
+        const custom = new Adw.EntryRow({
+            title: 'Custom thresholds (%)',
+            text: settings.get_value('custom-thresholds').deep_unpack().join(', '),
+            show_apply_button: true,
+        });
+        custom.connect('apply', () => {
+            const values = parseThresholdList(custom.text);
+            settings.set_value('custom-thresholds', new GLib.Variant('ai', values));
+            custom.text = values.join(', ');
+        });
+        settings.bind('notifications-enabled', custom, 'sensitive', Gio.SettingsBindFlags.GET);
+        notifications.add(custom);
+
+        const reset = switchRow(settings, 'notify-session-reset', 'Window reset',
+            'Notify when the 5-hour window resets after use');
+        settings.bind('notifications-enabled', reset, 'sensitive', Gio.SettingsBindFlags.GET);
+        notifications.add(reset);
+
         const privacy = new Adw.PreferencesGroup({title: 'Privacy'});
         page.add(privacy);
         privacy.add(new Adw.ActionRow({
             title: 'Read-only credentials',
             subtitle: 'Tokens remain in Claude Code’s credential file and are never saved in extension settings or history.',
         }));
+        return barColorModeId;
+    }
+
+    _buildHistoryPage(window, settings) {
+        const page = new Adw.PreferencesPage({
+            title: 'History',
+            icon_name: 'document-open-recent-symbolic',
+        });
+        window.add(page);
+        const toast = title => window.add_toast(new Adw.Toast({title, timeout: 5}));
+
+        const lists = [
+            ['session', 'Session windows'],
+            ['weekly', 'Weekly windows'],
+        ].map(([id, title]) => {
+            const group = new Adw.PreferencesGroup({
+                title,
+                description: 'Last 20 completed windows, newest first, with the peak usage.',
+            });
+            page.add(group);
+            return {id, group, rows: []};
+        });
+
+        const refresh = () => {
+            const history = readHistory(settings);
+            for (const list of lists) {
+                for (const row of list.rows)
+                    list.group.remove(row);
+                const records = windowRecords(history, list.id).slice(-20).reverse();
+                list.rows = records.map(record => new Adw.ActionRow({
+                    title: windowText(record),
+                    subtitle: `Peak ${Math.round(record.peak)}%`,
+                }));
+                if (!list.rows.length) {
+                    list.rows.push(new Adw.ActionRow({
+                        title: 'No completed windows yet',
+                        subtitle: 'A window is recorded once the panel has seen it reset.',
+                    }));
+                }
+                for (const row of list.rows)
+                    list.group.add(row);
+            }
+        };
+        refresh();
+        window.connect('notify::visible-page', () => {
+            if (window.visible_page === page)
+                refresh();
+        });
+
+        const exports = new Adw.PreferencesGroup({
+            title: 'Export',
+            description: 'Saves the stored samples to a file only you can read.',
+        });
+        page.add(exports);
+        for (const [kind, title, subtitle] of [
+            ['json', 'Export JSON', 'The samples as stored'],
+            ['csv', 'Export CSV', 'timestamp_iso, metric_id, percent'],
+        ]) {
+            const row = new Adw.ActionRow({title, subtitle});
+            const button = new Gtk.Button({label: 'Export…', valign: Gtk.Align.CENTER});
+            button.connect('clicked', () => this._exportHistory(window, settings, kind, toast));
+            row.add_suffix(button);
+            row.activatable_widget = button;
+            exports.add(row);
+        }
+
+        const clear = new Adw.PreferencesGroup({title: 'Clear'});
+        page.add(clear);
+        const row = new Adw.ActionRow({
+            title: 'Clear history',
+            subtitle: 'Deletes every stored sample and every record.',
+        });
+        const button = new Gtk.Button({
+            label: 'Clear…',
+            valign: Gtk.Align.CENTER,
+            css_classes: ['destructive-action'],
+        });
+        button.connect('clicked', () => {
+            const dialog = new Adw.AlertDialog({
+                heading: 'Clear history?',
+                body: 'Every stored usage sample is deleted, and the records and chart start over. This cannot be undone.',
+            });
+            dialog.add_response('cancel', 'Cancel');
+            dialog.add_response('clear', 'Clear');
+            dialog.set_response_appearance('clear', Adw.ResponseAppearance.DESTRUCTIVE);
+            dialog.set_default_response('cancel');
+            dialog.set_close_response('cancel');
+            dialog.choose(window, null, (source, result) => {
+                if (source.choose_finish(result) !== 'clear')
+                    return;
+                // The extension drops the samples and rewrites the file; every
+                // reader applies this cutoff until it has.
+                settings.set_int64('history-cleared-at', Date.now());
+                refresh();
+                toast('History cleared.');
+            });
+        });
+        row.add_suffix(button);
+        row.activatable_widget = button;
+        clear.add(row);
+    }
+
+    _exportHistory(window, settings, kind, toast) {
+        const history = readHistory(settings);
+        if (!history.samples.length) {
+            toast('There is no history to export.');
+            return;
+        }
+
+        const json = kind === 'json';
+        const dialog = new Gtk.FileDialog({
+            title: json ? 'Export history as JSON' : 'Export history as CSV',
+            initial_name: json ? 'claude-usage-history.json' : 'claude-usage-history.csv',
+        });
+        dialog.save(window, null, (source, result) => {
+            let file;
+            try {
+                file = source.save_finish(result);
+            } catch (error) {
+                if (!error.matches?.(Gtk.DialogError, Gtk.DialogError.DISMISSED))
+                    toast(`Export failed: ${error.message}`);
+                return;
+            }
+            const path = file.get_path();
+            if (!path) {
+                toast('Export failed: choose a location on this computer.');
+                return;
+            }
+            writeTextAsync(path, json ? JSON.stringify(history) : historyToCsv(history))
+                .then(() => toast(`Exported to ${path}`))
+                .catch(error => toast(`Export failed: ${error.message}`));
+        });
     }
 
     /** Returns the settings handler id the caller has to disconnect. */
@@ -358,7 +672,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         });
         window.add(page);
 
-        this._buildIntegrationGroup(page, window);
+        this._buildIntegrationGroup(page, window, settings);
         this._buildPreviewGroup(page);
 
         const layout = new Adw.PreferencesGroup({
@@ -374,6 +688,22 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
                 ['usage', 'Before usage'],
                 ['weekly', 'Before weekly'],
             ]));
+
+        layout.add(switchRow(settings, 'statusline-wrap-to-width', 'Wrap to terminal width',
+            'Start a new line before segments that exceed the terminal width'));
+        const skinRefresh = new Adw.SpinRow({
+            title: 'Statusline refresh interval',
+            subtitle: 'Seconds; 0 disables. Press Install or Reinstall to apply.',
+            adjustment: new Gtk.Adjustment({
+                lower: 0,
+                upper: 600,
+                step_increment: 1,
+                page_increment: 60,
+                value: settings.get_int('skin-refresh-interval'),
+            }),
+        });
+        settings.bind('skin-refresh-interval', skinRefresh, 'value', Gio.SettingsBindFlags.DEFAULT);
+        layout.add(skinRefresh);
 
         const components = new Adw.PreferencesGroup({
             title: 'Components',
@@ -434,7 +764,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
         return this._buildColorGroup(page, settings);
     }
 
-    _buildIntegrationGroup(page, window) {
+    _buildIntegrationGroup(page, window, settings) {
         const group = new Adw.PreferencesGroup({
             title: 'Integration',
             description: 'Point Claude Code’s statusLine at this extension.',
@@ -467,7 +797,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
 
         installButton.connect('clicked', () => {
             try {
-                const backup = install(this.path);
+                const backup = install(this.path, settings.get_int('skin-refresh-interval'));
                 report(backup
                     ? 'Statusline installed. Previous settings.json backed up.'
                     : 'Statusline installed.');
@@ -638,7 +968,7 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
             });
         } catch (_error) {
             this._stopPreview();
-            this._preview.set_text('Preview needs Node.js 18 or newer on PATH.');
+            this._preview.set_text('Preview needs Node.js 22 or newer on PATH.');
         }
     }
 }

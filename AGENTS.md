@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents working in this repository.
 
 ## Commands
 
@@ -24,10 +24,10 @@ filtering. A test either prints `… checks passed` or exits non-zero.
 Install/verify locally:
 
 ```bash
-gnome-extensions install --force dist/Codex-usage-tracker@theophilediot.github.io.shell-extension.zip
-# X11: Alt+F2, r, Enter. Wayland: log out and back in.
-gnome-extensions enable Codex-usage-tracker@theophilediot.github.io
-gnome-extensions prefs Codex-usage-tracker@theophilediot.github.io
+gnome-extensions install --force dist/claude-usage-tracker@theophilediot.github.io.shell-extension.zip
+# GNOME 46-49 on X11: Alt+F2, r, Enter. Otherwise log out and back in.
+gnome-extensions enable claude-usage-tracker@theophilediot.github.io
+gnome-extensions prefs claude-usage-tracker@theophilediot.github.io
 journalctl -f -o cat /usr/bin/gnome-shell   # extension logs (console.error output)
 ```
 
@@ -39,38 +39,42 @@ isn't added there is missing from the zip while still working from the source tr
 | File | Runtime | Loaded by |
 | --- | --- | --- |
 | `extension.js`, `prefs.js`, `skin.js`, `usage.js` | GJS, ES modules, `gi://` imports | GNOME Shell / prefs process |
-| `statusline.js` | Node.js 18+, CommonJS, zero deps | Codex, as the `statusLine` command |
+| `statusline.js` | Node.js 22+, CommonJS, zero deps | Claude Code, as the `statusLine` command |
 | `tests/test-usage.js`, `tests/test-skin.js` | GJS | `gjs -m` |
 | `tests/test-statusline.js` | Node | `node` |
 
 `statusline.js` is the only non-GJS file and must stay that way: no `import`, no `gi://`, no
 packages, no network, no writes. Shell code never imports it — `prefs.js` runs it as a
-subprocess to render the live preview, and Codex runs it as a command. Its `main()`
-swallows every error on purpose: a statusline must never disturb a Codex session.
+subprocess to render the live preview, and Claude Code runs it as a command. Its `main()`
+swallows every error on purpose: a statusline must never disturb a Claude session.
 
 ## Data flow
 
-Two independent paths that meet only through files in `~/.Codex` (or `$CLAUDE_CONFIG_DIR`):
+Two independent paths that meet only through files in `~/.claude` (or `$CLAUDE_CONFIG_DIR`):
 
-- **Panel** — `extension.js` reads Codex's OAuth token from `.credentials.json`
+- **Panel** — `extension.js` reads Claude Code's OAuth token from `.credentials.json`
   (memory-only, never persisted), GETs `https://api.anthropic.com/api/oauth/usage`, and passes
   the body through `normalizeUsage()` in `usage.js`. That produces the ordered metric list used
-  for cards, panel readout, notifications, the 24-hour chart
-  (`$XDG_STATE_HOME/Codex-usage-tracker/history.json`), and the skin cache.
-- **Skin** — Codex pipes session JSON (including `rate_limits`) to `statusline.js` on
+  for cards, panel readout, notifications, the history chart (5h, 24h, 7d and 30d scales),
+  the Prefs History page and the skin cache. History lives in
+  `$XDG_STATE_HOME/claude-usage-tracker/history.json`: 30 days of samples
+  `{at, metrics, resets}`, where `resets` maps each metric to its reset time so completed
+  windows can be rebuilt. Samples older than a week are thinned to the first, last and peak
+  per metric, hour and reset segment, so window bounds survive.
+- **Skin** — Claude Code pipes session JSON (including `rate_limits`) to `statusline.js` on
   stdin. It renders from stdin plus `statusline-config.txt`, falling back to
   `.statusline-usage-cache` for the start of a session, for extra-usage cost, and for weekly
-  usage. Codex's stdin `rate_limits` only ever carries `five_hour` and `seven_day`, and
+  usage. Claude Code's stdin `rate_limits` only ever carries `five_hour` and `seven_day`, and
   the API no longer fills `seven_day` on every plan — it reports the weekly window per model in
   `limits[]` — so `writeUsageCache()` falls back to the first `model:*` metric and the panel is
   the skin's only weekly source.
 
-Files the extension writes, all `0600`: `~/.Codex/statusline-config.txt`,
-`~/.Codex/.statusline-usage-cache`, and the history JSON.
+Files the extension writes, all `0600`: `~/.claude/statusline-config.txt`,
+`~/.claude/.statusline-usage-cache`, and the history JSON.
 
 ## The config-file contract
 
-The skin cannot read GSettings, so settings are projected into `~/.Codex/statusline-config.txt`
+The skin cannot read GSettings, so settings are projected into `~/.claude/statusline-config.txt`
 as `KEY=value` lines using the **macOS tracker's key names and format** — the file stays
 readable and hand-editable for people coming from that app. Three places must agree, and two
 tests enforce it:
@@ -86,6 +90,9 @@ it). `tests/test-skin.js` asserts `SKIN_KEYS.length` equals the projected key co
 skin option means four edits — schema, `skin.js` map, `statusline.js` DEFAULTS + rendering,
 `prefs.js` row — and the tests fail loudly if you forget one.
 
+`skin-refresh-interval` is separate: it configures `statusLine.refreshInterval` on Install or
+Reinstall (0 omits it), never the projected config or `DEFAULTS`.
+
 Config values are stripped of `"`, `\`, and newlines on write and quote-trimmed on read; a value
 must never be able to inject a second `KEY=` line (tested).
 
@@ -93,10 +100,11 @@ must never be able to inject a second `KEY=` line (tested).
 
 - **Upstream fidelity.** `statusline.js` is a port of the macOS app's
   `statusline-command.sh`: component order, the ten-level `GRADIENT`, the six-tier `PACE`
-  spectrum, the marker position math, and the four color modes all mirror it. Only three
+  spectrum, the marker position math, and the four color modes all mirror it. Five
   departures are intentional and documented in the file header + `DESIGN.md`: usage comes from
   stdin `rate_limits` instead of an injected session key, `NO_COLOR` also suppresses reset
-  sequences, and `LINE_BREAK` can split the row. Don't add a fourth silently.
+  sequences, `LINE_BREAK` can split the row, effort replaces the model slot, and
+  `WRAP_TO_WIDTH` can wrap segments at terminal `COLUMNS`. Document any further departure.
 - **Untrusted values are terminal-bound.** Branch names, directory names, and model names go
   straight to a terminal; `clean()` strips C0/C1 controls and bidi overrides. Anything new that
   reaches the output must go through it (there's a hostile-input test).
@@ -105,8 +113,8 @@ must never be able to inject a second `KEY=` line (tested).
   Leaked sources survive disable/enable and are the recurring bug class here.
 - **No synchronous I/O in shell code.** `extension.js` imports `skin.js`, so every read there
   goes through `loadTextAsync()` and every write through `writeTextAsync()`; sync I/O blocks the
-  compositor and EGO review flags it. `~/.Codex.json` is the reason reads matter — it carries
-  Codex's project history and grows without bound, so the account label is read once at
+  compositor and EGO review flags it. `~/.claude.json` is the reason reads matter — it carries
+  Claude Code's project history and grows without bound, so the account label is read once at
   enable and cached, never per refresh. `writeTextAsync()` writes with `PRIVATE` and chmods to
   0600, and treats cancellation as success because the only canceller is `disable()`. The sync
   `settings.json` helpers (`install`, `remove`, `isInstalled`) live in `prefs.js` because
@@ -123,6 +131,8 @@ must never be able to inject a second `KEY=` line (tested).
   on screen). Extra usage arrives twice — the flat `extra_usage` block and a newer `spend`
   object holding the same figures as minor units — so `extraUsageFrom()` prefers `extra_usage`
   while both are sent and falls back to `spend` for the payload that drops it.
+- **Pace tiers are pinned.** The panel's pace-tier table in `usage.js` (`PACE_TIERS`) must match
+  `paceColor` in `statusline.js`; `tests/test-usage.js` parses the skin and fails on any drift.
 - **Cached data stays useful.** Network and auth failures show the last good values with a stale
   state, never a blank panel.
 - **No dependencies, no bundler, no build step** beyond `glib-compile-schemas` and

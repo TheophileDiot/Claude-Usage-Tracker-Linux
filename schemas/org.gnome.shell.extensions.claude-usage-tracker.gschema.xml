@@ -59,6 +59,113 @@
       <default>0</default>
       <summary>Highest notified threshold in current session window</summary>
     </key>
+    <key name="show-pace-marker" type="b">
+      <default>true</default>
+      <summary>Show the pace marker on bars</summary>
+      <description>Draw a thin tick on each panel and popup bar at the elapsed share of the 5-hour or 7-day window. Its colour is the projected end-of-window usage: six tiers, as in the Claude Code skin.</description>
+    </key>
+    <key name="bar-color-basis" type="s">
+      <default>'usage'</default>
+      <choices>
+        <choice value="usage"/>
+        <choice value="pace"/>
+      </choices>
+      <summary>What colours the bars</summary>
+      <description>usage colours a bar by the usage itself. pace colours it by usage projected to the end of the window once 15 percent of the window has elapsed, falling back to usage before that.</description>
+    </key>
+    <key name="bar-color-mode" type="s">
+      <default>'levels'</default>
+      <choices>
+        <choice value="levels"/>
+        <choice value="single"/>
+      </choices>
+      <summary>Bar colour mode</summary>
+      <description>levels colours bars green, amber or red from the 70 and 90 percent cut-offs. single paints every panel and popup bar in the single colour below.</description>
+    </key>
+    <key name="single-color" type="s">
+      <default>'#00BFFF'</default>
+      <summary>Single bar colour</summary>
+      <description>Hex colour used for every panel and popup bar when the bar colour mode is single.</description>
+    </key>
+    <key name="reset-display" type="s">
+      <default>'relative'</default>
+      <choices>
+        <choice value="relative"/>
+        <choice value="absolute"/>
+        <choice value="both"/>
+      </choices>
+      <summary>How reset times are shown</summary>
+      <description>relative shows time left ("Resets in 1h 5m"), absolute shows the clock time ("Resets at 4:15 PM"), both shows the two together.</description>
+    </key>
+    <key name="time-format" type="s">
+      <default>'system'</default>
+      <choices>
+        <choice value="system"/>
+        <choice value="12h"/>
+        <choice value="24h"/>
+      </choices>
+      <summary>Clock format for absolute reset times</summary>
+      <description>system follows the GNOME clock-format setting; 12h and 24h override it.</description>
+    </key>
+    <key name="panel-show-countdown" type="b">
+      <default>false</default>
+      <summary>Show a reset countdown in the panel</summary>
+      <description>Add a compact time to reset, such as 2h or 45m, to the 5-hour panel readout.</description>
+    </key>
+    <key name="notify-session-reset" type="b">
+      <default>true</default>
+      <summary>Notify when the 5-hour window resets</summary>
+      <description>Send one notification when the 5-hour window rolls over after a window in which usage was above zero. Needs usage notifications to be enabled.</description>
+    </key>
+    <key name="custom-thresholds" type="ai">
+      <default>[]</default>
+      <summary>Extra notification thresholds</summary>
+      <description>Additional usage percentages, from 1 to 100, that notify once per 5-hour window next to the 75, 90 and 95 toggles. Values outside that range are ignored.</description>
+    </key>
+    <key name="last-session-peak" type="i">
+      <default>0</default>
+      <summary>Highest usage seen in the current session window</summary>
+      <description>Internal state: the rounded-up peak usage of the last observed 5-hour window, used to tell whether a rollover deserves a notification.</description>
+    </key>
+
+    <key name="history-scale" type="s">
+      <default>'24h'</default>
+      <choices>
+        <choice value="5h"/>
+        <choice value="24h"/>
+        <choice value="7d"/>
+        <choice value="30d"/>
+      </choices>
+      <summary>Popup chart time scale</summary>
+      <description>How much history the popup chart covers: 5 hours in 15-minute buckets, 24 hours in hours, 7 days in 6-hour buckets, or 30 days in days.</description>
+    </key>
+    <key name="history-cleared-at" type="x">
+      <default>0</default>
+      <summary>History cleared at</summary>
+      <description>Milliseconds since the epoch. Preferences set it when history is cleared; samples at or before it are discarded wherever history is read.</description>
+    </key>
+    <key name="shortcut-toggle-menu" type="as">
+      <default>[]</default>
+      <summary>Shortcut: open or close the popup</summary>
+    </key>
+    <key name="shortcut-refresh" type="as">
+      <default>[]</default>
+      <summary>Shortcut: refresh usage</summary>
+    </key>
+    <key name="shortcut-open-prefs" type="as">
+      <default>[]</default>
+      <summary>Shortcut: open preferences</summary>
+    </key>
+    <key name="show-claude-status" type="b">
+      <default>false</default>
+      <summary>Show Claude service status</summary>
+      <description>Adds a row to the popup with the current status of status.claude.com. The page is requested at most every 5 minutes, only while this is on, without credentials.</description>
+    </key>
+    <key name="skin-refresh-interval" type="i">
+      <default>0</default>
+      <range min="0" max="600"/>
+      <summary>Claude Code statusline refresh interval; zero disables it</summary>
+    </key>
 
     <!-- Claude Code skin. Mirrors the macOS statusline-config.txt keys. -->
     <key name="statusline-show-directory" type="b">
@@ -144,6 +251,10 @@
     <key name="statusline-show-extra-usage" type="b">
       <default>false</default>
       <summary>Show extra usage cost in the Claude Code skin</summary>
+    </key>
+    <key name="statusline-wrap-to-width" type="b">
+      <default>false</default>
+      <summary>Wrap skin segments to terminal width</summary>
     </key>
     <key name="statusline-line-break" type="s">
       <default>'none'</default>

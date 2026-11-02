@@ -3,6 +3,7 @@ import GLib from 'gi://GLib';
 
 import {
     SKIN_KEYS,
+    historyPath,
     loadTextAsync,
     readAccountLabelAsync,
     renderConfig,
@@ -75,6 +76,7 @@ const expected = {
     ELEMENT_COLOR_WEEKLY: '',
     ELEMENT_COLOR_EXTRA: '',
     LINE_BREAK: 'none',
+    WRAP_TO_WIDTH: '0',
 };
 
 for (const [key, value] of Object.entries(expected))
@@ -96,6 +98,44 @@ assert(statuslineCommand('/opt/ext') === 'node "/opt/ext/statusline.js"',
 // Shell code must not block the compositor on I/O, so both writers are async.
 const tmp = GLib.Dir.make_tmp('claude-usage-tracker-XXXXXX');
 const missing = GLib.build_filenamev([tmp, 'missing']);
+// Panel settings: defaults and choice enforcement (extension.js relies on both).
+const panelDefaults = {
+    'show-pace-marker': true, 'bar-color-basis': 'usage', 'bar-color-mode': 'levels',
+    'single-color': '#00BFFF', 'reset-display': 'relative', 'time-format': 'system',
+    'panel-show-countdown': false, 'notify-session-reset': true, 'last-session-peak': 0,
+    'history-scale': '24h', 'show-claude-status': false,
+};
+for (const [key, value] of Object.entries(panelDefaults)) {
+    const actual = typeof value === 'boolean' ? settings.get_boolean(key)
+        : typeof value === 'number' ? settings.get_int(key) : settings.get_string(key);
+    assert(actual === value, `${key} defaults to ${value}`);
+}
+assert(settings.get_value('custom-thresholds').deep_unpack().length === 0,
+    'custom-thresholds defaults to none');
+settings.set_value('custom-thresholds', new GLib.Variant('ai', [60, 85]));
+assert(settings.get_value('custom-thresholds').deep_unpack().join() === '60,85',
+    'custom-thresholds round-trips an int array');
+assert(settings.get_int64('history-cleared-at') === 0, 'history-cleared-at defaults to 0');
+settings.set_int64('history-cleared-at', 1_790_000_000_000);
+assert(settings.get_int64('history-cleared-at') === 1_790_000_000_000,
+    'history-cleared-at holds a millisecond epoch');
+for (const key of ['shortcut-toggle-menu', 'shortcut-refresh', 'shortcut-open-prefs']) {
+    assert(settings.get_strv(key).length === 0, `${key} is unset by default`);
+    settings.set_strv(key, ['<Control><Alt>u']);
+    assert(settings.get_strv(key).join() === '<Control><Alt>u', `${key} round-trips`);
+}
+assert(!settings.settings_schema.get_key('history-scale')
+    .range_check(new GLib.Variant('s', '90d')), 'history-scale only accepts its four scales');
+for (const scale of ['5h', '24h', '7d', '30d']) {
+    settings.set_string('history-scale', scale);
+    assert(settings.get_string('history-scale') === scale, `history-scale accepts ${scale}`);
+}
+assert(historyPath() === GLib.build_filenamev(
+    [GLib.get_user_state_dir(), 'claude-usage-tracker', 'history.json']),
+'history path is the one the README documents');
+assert(!SKIN_KEYS.some(key => Object.hasOwn(panelDefaults, key)),
+    'panel settings never reach the skin config file');
+
 const written = GLib.build_filenamev([tmp, 'statusline-config.txt']);
 const cached = GLib.build_filenamev([tmp, '.statusline-usage-cache']);
 
@@ -164,6 +204,10 @@ let asyncError = null;
             'loadTextAsync reports a missing file as no text');
         assert(await readAccountLabelAsync() === 'Acme Inc',
             'readAccountLabelAsync reads the account label');
+        GLib.file_set_contents(account,
+            JSON.stringify({oauthAccount: {emailAddress: 'email-only@example.test'}}));
+        assert(await readAccountLabelAsync() === 'email-only@example.test',
+            'account label falls back to emailAddress');
     } catch (error) {
         asyncError = error;
     }

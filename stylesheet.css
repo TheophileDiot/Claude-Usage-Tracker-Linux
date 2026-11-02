@@ -236,14 +236,88 @@
     spacing: 2px;
 }
 
+/* Slot and bar widths are set from code: they shrink as the scale gains buckets. */
 .cut-history-slot {
-    width: 8px;
     height: 22px;
 }
 
 .cut-history-bar {
-    width: 6px;
     border-radius: 2px 2px 0 0;
+}
+
+.cut-history-rows {
+    spacing: 8px;
+}
+
+.cut-scale-row {
+    spacing: 4px;
+}
+
+.cut-scale-button {
+    padding: 2px 0;
+    color: #aeb2af;
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.cut-scale-button:hover,
+.cut-scale-button:focus {
+    background-color: rgba(255, 255, 255, 0.14);
+}
+
+.cut-scale-button:checked {
+    color: #111412;
+    background-color: #f28c28;
+}
+
+.cut-status-row {
+    margin: 0 14px 12px;
+    padding: 7px 12px;
+    background-color: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 14px;
+}
+
+.cut-status-row:hover,
+.cut-status-row:focus {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.cut-status-content {
+    spacing: 8px;
+}
+
+.cut-status-dot {
+    width: 8px;
+    height: 8px;
+    margin-top: 4px;
+    border-radius: 4px;
+    background-color: #65d879;
+}
+
+.cut-status-dot.status-minor {
+    background-color: #e8c547;
+}
+
+.cut-status-dot.status-major {
+    background-color: #ffad42;
+}
+
+.cut-status-dot.status-critical {
+    background-color: #ff6267;
+}
+
+.cut-status-dot.status-maintenance {
+    background-color: #6aa8ff;
+}
+
+.cut-status-label {
+    color: #c7cac8;
+    font-size: 11px;
+    font-weight: 550;
 }
 
 .cut-history-bar.history-empty {
@@ -280,4 +354,22 @@
     height: 9px;
     background-color: #f3f3f3;
     border-radius: 5px;
+}
+
+.cut-panel-countdown {
+    color: #a8aca9;
+    font-size: 10px;
+}
+
+/* Colour is set from code (projected usage); position is set by the extension. */
+.cut-pace-tick {
+    width: 2px;
+    height: 11px;
+    border-radius: 1px;
+}
+
+.cut-panel-pace-tick {
+    width: 2px;
+    height: 11px;
+    border-radius: 1px;
 }

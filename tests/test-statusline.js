@@ -4,6 +4,11 @@
 process.env.TZ = 'UTC';
 
 const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const vm = require('vm');
+const {stripVTControlCharacters} = require('util');
 const {
     DEFAULTS,
     clockTime,
@@ -259,4 +264,256 @@ assert(!hostile.includes('\x1b') && !hostile.includes('\nspoof') &&
     !hostile.includes('\u202e') && hostile.includes('highspoof'),
     'terminal control sequences stripped from untrusted values');
 
-console.log('statusline checks passed');
+// --- Platform drift regressions ---------------------------------------------
+const extensionSource = fs.readFileSync(path.join(__dirname, '..', 'extension.js'), 'utf8');
+const verticalConstant = /const VERTICAL_LAYOUT = [\s\S]*?;/;
+assert(!/vertical\s*:\s*true/.test(extensionSource.replace(verticalConstant, '')),
+    'legacy vertical property belongs only in the version-selected constant');
+
+assert(!render({workspace: {git_worktree: 'worktree-name'}}, {branch: undefined})
+    .includes('⎇'), 'worktree names are not branch names');
+assert(render({worktree: {branch: 'real-branch'}}, {branch: undefined})
+    .includes('⎇ real-branch'), 'explicit worktree branch remains supported');
+
+for (const context_window of [
+    {used_percentage: 150},
+    {context_window_size: 100, current_usage: {input_tokens: 150}},
+]) {
+    const line = render({context_window, rate_limits: {
+        five_hour: {used_percentage: 150}, seven_day: {used_percentage: 200},
+    }}, {config: config({SHOW_WEEKLY: '1'})});
+    assert(line.includes('Ctx: 100%'), 'context percentage clamps to 100');
+    assert(line.includes('Usage: 100% ▓▓▓▓▓▓▓▓▓▓'), 'session text and bar clamp to 100');
+    assert(line.includes('Weekly: 100% ▓▓▓▓▓▓▓▓▓▓'), 'weekly text and bar clamp to 100');
+}
+
+const oldColumns = process.env.COLUMNS;
+try {
+    process.env.COLUMNS = '20';
+    assert(!render(session).includes('\n'), 'wrapping defaults off even with narrow COLUMNS');
+    const wrapConfig = config({WRAP_TO_WIDTH: '1', SHOW_USAGE: '0'});
+    assert.strictEqual(render(session, {config: wrapConfig}),
+        'myproj │ ⎇ main\nhigh │ Ctx: 7%', 'narrow terminal wraps before whole segments');
+    assert.strictEqual(stripVTControlCharacters(render(session, {
+        config: wrapConfig, colors: true,
+    })), 'myproj │ ⎇ main\nhigh │ Ctx: 7%', 'ANSI colors consume no width');
+    assert.strictEqual(render(session, {config: {...wrapConfig, LINE_BREAK: 'context'}}),
+        'myproj │ ⎇ main\nhigh\nCtx: 7%', 'explicit break applies before width wrapping');
+    for (const columns of [undefined, '0', '-1', '3.5', '20oops']) {
+        if (columns === undefined)
+            delete process.env.COLUMNS;
+        else
+            process.env.COLUMNS = columns;
+        assert(!render(session, {config: wrapConfig}).includes('\n'),
+            'missing or invalid COLUMNS leaves one line');
+    }
+} finally {
+    if (oldColumns === undefined)
+        delete process.env.COLUMNS;
+    else
+        process.env.COLUMNS = oldColumns;
+}
+
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-statusline-test-'));
+try {
+    fs.writeFileSync(path.join(tmp, '.claude.json'),
+        JSON.stringify({oauthAccount: {emailAddress: 'email-only@example.test'}}));
+    fs.writeFileSync(path.join(tmp, 'statusline-config.txt'),
+        'SHOW_PROFILE=1\nSHOW_DIRECTORY=0\nSHOW_BRANCH=0\nSHOW_USAGE=0\n');
+    const profile = vm.runInNewContext(
+        fs.readFileSync(path.join(__dirname, '..', 'statusline.js'), 'utf8') + '\nreadProfile();', {
+            require: name => name === 'os' ? {homedir: () => tmp} : require(name),
+            process: {env: {CLAUDE_CONFIG_DIR: tmp}}, module: {exports: {}},
+        });
+    assert.strictEqual(profile, 'email-only@example.test',
+        'profile reader falls back to emailAddress');
+
+    // Run the real prefs file helpers against an isolated settings directory.
+    const prefsSource = fs.readFileSync(path.join(__dirname, '..', 'prefs.js'), 'utf8');
+    const prefsContext = {
+        claudeDirectory: () => tmp,
+        statuslineCommand: directory => `node "${directory}/statusline.js"`,
+        TextDecoder,
+        GLib: {
+            FileTest: {EXISTS: 1},
+            file_test: fs.existsSync,
+            file_get_contents: file => [true, fs.readFileSync(file)],
+            file_set_contents: fs.writeFileSync,
+            chmod: fs.chmodSync,
+            mkdir_with_parents: directory => fs.mkdirSync(directory, {recursive: true}),
+            build_filenamev: parts => path.join(...parts),
+            DateTime: {new_now_local: () => ({format: () => 'test-stamp'})},
+        },
+    };
+    vm.runInNewContext(prefsSource.slice(prefsSource.indexOf('const SETTINGS_FILE'),
+        prefsSource.indexOf('const BASIC_ANSI')), prefsContext);
+    const settingsFile = path.join(tmp, 'settings.json');
+    fs.writeFileSync(settingsFile, JSON.stringify({keep: true}));
+    const backup = prefsContext.install('/opt/ext', 60);
+    assert.strictEqual(JSON.parse(fs.readFileSync(settingsFile)).statusLine.refreshInterval, 60,
+        'install writes positive refreshInterval');
+    assert.strictEqual(JSON.parse(fs.readFileSync(backup)).keep, true, 'install retains backup');
+    assert(prefsContext.isInstalled('/opt/ext'), 'skin stays installed');
+    prefsContext.install('/opt/ext', 0);
+    const reinstalled = JSON.parse(fs.readFileSync(settingsFile));
+    assert(!('refreshInterval' in reinstalled.statusLine), 'reinstall with zero removes interval');
+    assert.strictEqual(reinstalled.keep, true, 'reinstall preserves unrelated settings');
+} finally {
+    fs.rmSync(tmp, {recursive: true, force: true});
+}
+
+async function testPanelDrift() {
+    let credentialText = '{}';
+    let responseStatus = 429;
+    let retryAfter = '120';
+    let requests = 0;
+    const context = {
+        Config: {PACKAGE_VERSION: '51.1'},
+        Clutter: {Orientation: {VERTICAL: 1}},
+        GObject: {registerClass: value => value},
+        PanelMenu: {Button: class {}}, Extension: class {},
+        Gio: {Cancellable: class { is_cancelled() { return false; } }}, GLib: {PRIORITY_DEFAULT: 0},
+        Soup: {Message: {new: () => ({
+            status_code: responseStatus,
+            request_headers: {append() {}},
+            response_headers: {get_one: () => retryAfter},
+        })}},
+        loadTextAsync: async () => credentialText,
+        TextDecoder,
+        normalizeUsage: value => value,
+    };
+    vm.createContext(context);
+    const source = extensionSource.replace(/^import [\s\S]*?;\n/gm, '')
+        .replace('export default class', 'class');
+    vm.runInContext(`${source}\nglobalThis.Indicator = ClaudeUsageIndicator;\n` +
+        'globalThis.layout = VERTICAL_LAYOUT;', context);
+    assert.strictEqual(context.layout.orientation, 1, 'GNOME 51 uses orientation');
+    for (const version of ['46.8', '47.0', '48.0', '50.1']) {
+        const layout = vm.runInNewContext(
+            extensionSource.match(verticalConstant)[0] + '\nVERTICAL_LAYOUT;', {
+                Config: {PACKAGE_VERSION: version}, Clutter: context.Clutter,
+            });
+        assert(version.startsWith('46') || version.startsWith('47')
+            ? layout.vertical === true : layout.orientation === 1,
+        `layout constructor property matches GNOME ${version}`);
+    }
+    const indicator = new context.Indicator();
+    indicator._credentialPaths = () => ['fake-credentials'];
+    indicator._settings = {get_int: () => 60};
+    indicator._setLoading = () => {};
+    indicator._showFailure = message => { indicator.failure = message; };
+    indicator._showUsage = () => {};
+    indicator._session = {
+        send_and_read_async(message, _priority, _cancellable, callback) {
+            requests++;
+            callback(this, {});
+        },
+        send_and_read_finish: () => ({get_data: () => Buffer.from('{}')}),
+    };
+    await assert.rejects(() => indicator._readCredentials(),
+        /No claude.ai login found.*Pro, Max or Ultra/);
+    credentialText = JSON.stringify({claudeAiOauth: {
+        accessToken: 'fake-token', refreshToken: 'fake-refresh', expiresAt: Date.now() - 1,
+        refreshTokenExpiresAt: Date.now() + 60_000,
+    }});
+    await assert.rejects(() => indicator._readCredentials(), /Start Claude Code once to renew it/);
+    credentialText = JSON.stringify({claudeAiOauth: {
+        accessToken: 'fake-token', refreshToken: '', expiresAt: 0,
+        refreshTokenExpiresAt: Date.now() + 60_000,
+    }});
+    await assert.rejects(() => indicator._readCredentials(), /Run claude auth login/,
+        'a wiped refresh token cannot be renewed by starting Claude Code');
+    credentialText = JSON.stringify({claudeAiOauth: {
+        accessToken: '', refreshToken: '', expiresAt: 0,
+        refreshTokenExpiresAt: Date.now() + 60_000,
+    }});
+    await assert.rejects(() => indicator._readCredentials(), /Run claude auth login/,
+        'a wiped login with a refresh expiry reads as expired, not as an API key');
+    credentialText = JSON.stringify({claudeAiOauth: {
+        accessToken: 'fake-token', expiresAt: 1, refreshTokenExpiresAt: 1,
+    }});
+    await assert.rejects(() => indicator._readCredentials(), /Run claude auth login/);
+    credentialText = JSON.stringify({claudeAiOauth: {accessToken: 'fake-token'}});
+    indicator._credentialPaths = () => ['empty-credentials', 'valid-credentials'];
+    context.loadTextAsync = async file => file === 'empty-credentials' ? '{}' : credentialText;
+    assert.strictEqual(await indicator._readCredentials(), 'fake-token',
+        'missing OAuth in first file still allows legacy credential path');
+    indicator._credentialPaths = () => ['valid-credentials'];
+    const before = Date.now();
+    await indicator._refreshUsage();
+    assert(indicator._retryAfter >= before + 120_000, '429 delay-seconds sets backoff');
+    assert(indicator.failure.includes(new Date(indicator._retryAfter).toLocaleString()),
+        'rate limit message names next attempt time');
+    await indicator._refreshUsage();
+    assert.strictEqual(requests, 1, 'scheduled refresh skips during backoff');
+    retryAfter = new Date(Date.now() + 240_000).toUTCString();
+    await indicator._refreshUsage(true);
+    assert.strictEqual(requests, 2, 'manual refresh can bypass backoff');
+    assert.strictEqual(indicator._retryAfter, Date.parse(retryAfter), '429 accepts HTTP-date');
+    retryAfter = 'invalid';
+    await indicator._refreshUsage(true);
+    assert(indicator._retryAfter >= Date.now() + 59_000, 'invalid header uses normal interval');
+    responseStatus = 200;
+    await indicator._refreshUsage(true);
+    assert.strictEqual(indicator._retryAfter, 0, 'successful manual retry clears backoff');
+}
+
+function loadIndicator(overrides = {}) {
+    const usageSource = fs.readFileSync(path.join(__dirname, '..', 'usage.js'), 'utf8')
+        .replace(/^export /gm, '');
+    const context = {
+        Config: {PACKAGE_VERSION: '51.1'},
+        Clutter: {Orientation: {VERTICAL: 1}},
+        GObject: {registerClass: value => value},
+        PanelMenu: {Button: class {}}, Extension: class {},
+        Gio: {Cancellable: class {}}, GLib: {PRIORITY_DEFAULT: 0},
+        console, TextDecoder, ...overrides,
+    };
+    vm.createContext(context);
+    const source = extensionSource.replace(/^import [\s\S]*?;\n/gm, '')
+        .replace('export default class', 'class');
+    vm.runInContext(`${usageSource}\n${source}\nglobalThis.Indicator = ClaudeUsageIndicator;`, context);
+    return new context.Indicator();
+}
+
+function testPanelFixups() {
+    // A weekly-only response after a used 5-hour window must still announce the reset.
+    const ended = new Date(Date.now() - 60_000).toISOString();
+    const saved = {'last-session-reset': ended, 'last-session-peak': 30, 'last-notified-threshold': 0};
+    const indicator = loadIndicator();
+    indicator._settings = {
+        get_string: key => saved[key],
+        get_int: key => saved[key],
+        get_boolean: () => true,
+        get_value: () => ({deep_unpack: () => []}),
+        set_string: (key, value) => { saved[key] = value; },
+        set_int: (key, value) => { saved[key] = value; },
+    };
+    const notices = [];
+    indicator._notify = body => notices.push(body);
+    indicator._checkNotifications(undefined);
+    assert.strictEqual(JSON.stringify(notices), JSON.stringify(['The 5-hour window has reset.']),
+        'a payload without the session window still notifies the reset once');
+    indicator._checkNotifications(undefined);
+    assert.strictEqual(notices.length, 1, 'the reset is not repeated');
+
+    // Startup restore reads each metric from its own latest sample.
+    const restored = loadIndicator();
+    restored._history = {samples: [
+        {at: 1, metrics: {session: 30, weekly: 40, extra: 5}},
+        {at: 2, metrics: {extra: 6}},
+    ]};
+    restored._setState = () => {};
+    restored._renderMetrics = () => {};
+    restored._renderHistory = () => {};
+    restored._updatePanel = () => {};
+    restored._restoreHistorySnapshot();
+    assert.strictEqual(JSON.stringify(restored._lastMetrics.map(item => [item.id, item.percent])),
+        JSON.stringify([['session', 30], ['weekly', 40], ['extra', 6]]),
+        'a sparse latest sample still restores the stable quotas');
+}
+
+testPanelDrift().then(testPanelFixups).then(() => console.log('statusline checks passed')).catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+});

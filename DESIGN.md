@@ -2,9 +2,15 @@
 
 The popup keeps the compact dark quota-card hierarchy of the original macOS tracker while using native GNOME panel behavior and controls.
 
-- 310 px popover with account and freshness state first, then quota cards and the 24-hour chart.
+- 310 px popover with account and freshness state first, then quota cards, the usage chart, and the optional status row.
 - Near-black `#111412` surface, Claude orange `#f28c28`, and green/amber/red quota states.
-- Percentage text always accompanies color; reset times and stale/error states remain explicit.
+- Percentage text always accompanies color; reset times and stale/error states remain explicit. Level colours switch at 70% (amber `#ffad42`) and 90% (red `#ff6267`); safe is `#65d879`.
+- Bar colour has three inputs: the level colours by usage, the same cut-offs applied to usage projected to the end of the window (**Colour by: Pace**, from 15% elapsed), or one user-chosen hex (**Single colour**, default `#00BFFF`) for every panel and popup bar, history bars included.
+- Pace marker: a 2 px tick on each bar, rising 3 px above and below the 5 px card track (1 px over the 9 px panel track), at the elapsed share of the 5-hour or 7-day window, mirrored in Remaining mode. Its colour is the skin's six projected-usage tiers: `#00af00`, `#00afaf`, `#d7af00`, `#ff8700`, `#d70000`, `#af5fff`. Hidden below 540 s (session) or 3024 s (weekly) elapsed, when the window or reset time is unknown, and while the window has not started or has ended. Position is scaled by hand with the theme scale factor; the accessible name of the bar states the projection.
+- The chart card heads a pill row of four toggle buttons — `5h`, `24h`, `7d`, `30d` — under the title and `Used %` caption; the selected one is Claude orange (`#f28c28`) on near-black text, the others muted. Title follows the scale (`Last 5 hours` … `Last 30 days`). Bars share the card's inner width (250 px): slot width is `floor((250 − 2 px × (buckets − 1)) / buckets)`, capped at 8 px, so 20/24/28/30 buckets fit without scrolling; widths are scaled by hand with the theme scale factor. The row stays reachable when the chosen range has no data.
+- The status row (opt-in) is a full-width button under the cards, same card surface, with an 8 px dot and the page's description: `none` green `#65d879`, `minor` yellow `#e8c547`, `major` amber `#ffad42`, `critical` red `#ff6267`, `maintenance` blue `#6aa8ff`. It hides when the status is unknown or unreachable; activating it opens status.claude.com.
+- The header state line reads `Updated N min ago` (refreshed every 60 s while the popup is open), or `Refresh failed N times` from the second consecutive failure, followed by the age of the last good refresh.
+- The panel countdown is a muted 10 px label after the 5h readout (`2h`, `45m`); off by default.
 - Header actions are keyboard-focusable icon buttons with accessible names and hover tooltips: refresh, use a limit reset (revert icon; opens `claude /limit-reset` in a terminal), and settings.
 - GNOME typography and text scaling are inherited; no bundled fonts or web UI runtime.
 - Preferences use native Libadwaita rows and controls.
@@ -13,6 +19,8 @@ The top panel stays deliberately compact: optional icon plus separate `5h` and `
 
 The Claude Code skin follows the macOS statusline layout: a single row of `directory │ ⎇ branch │ high │ profile │ Ctx: n% │ Usage: n% ▓▓┃░░ → Reset: 4:15 PM`, with weekly and extra-usage segments available. Usage carries a ten-level gradient and a pace marker — a `┃` at the elapsed-time position whose distance from the fill edge shows burn rate, colored across six projected-usage tiers. Four color modes match the mac app: Multi-Color, Greyscale, Single Color, and Per Element. `NO_COLOR` disables decoration entirely.
 
-Two deliberate departures from the mac app: usage comes from the `rate_limits` Claude Code already supplies on stdin rather than an injected session key, and a line break can be placed before any segment for narrow terminals. Preferences carry a Claude Code page mirroring the mac app's tab, including a live preview rendered by the skin itself.
+Five deliberate departures from the mac app: usage comes from the `rate_limits` Claude Code already supplies on stdin rather than an injected session key; `NO_COLOR` suppresses reset sequences too; `LINE_BREAK` splits before a chosen segment; effort replaces the model slot; and optional `WRAP_TO_WIDTH` wraps whole segments at terminal `COLUMNS`, ignoring ANSI colors. Explicit line breaks apply first, missing or invalid `COLUMNS` leaves them unchanged, and a segment wider than the terminal stays whole. Width counts code points, so wide or combining glyphs may differ from terminal cells. Preferences carry a Claude Code page mirroring the mac app's tab, including a live preview rendered by the skin itself.
 
 The model segment is also replaced by reasoning effort from stdin `effort.level`, since Claude Code already displays the model. It reads `high` (or the supplied level) and is omitted when no effort is reported. Preferences call it **Effort level**; the `SHOW_MODEL` / `ELEMENT_COLOR_MODEL` config keys and corresponding GSettings names are retained for compatibility with existing settings.
+
+The optional **Statusline refresh interval** sets Claude Code’s idle refresh cadence (0 disables; 1-600 seconds). It applies on **Install** or **Reinstall**, retaining the timestamped settings backup without writing on each spin change.

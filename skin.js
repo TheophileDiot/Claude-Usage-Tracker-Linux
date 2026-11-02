@@ -36,6 +36,7 @@ const BOOLEAN_KEYS = {
     'statusline-show-weekly-reset-time': 'SHOW_WEEKLY_RESET_TIME',
     'statusline-show-weekly-label': 'SHOW_WEEKLY_LABEL',
     'statusline-show-extra-usage': 'SHOW_EXTRA_USAGE',
+    'statusline-wrap-to-width': 'WRAP_TO_WIDTH',
 };
 
 const STRING_KEYS = {
@@ -59,6 +60,18 @@ export const SKIN_KEYS = [...Object.keys(BOOLEAN_KEYS), ...Object.keys(STRING_KE
 export function claudeDirectory() {
     return GLib.getenv('CLAUDE_CONFIG_DIR') ||
         GLib.build_filenamev([GLib.get_home_dir(), '.claude']);
+}
+
+const HISTORY_DIRECTORY = 'claude-usage-tracker';
+const HISTORY_FILE = 'history.json';
+
+/** Shared by the shell and preferences so both read and write the same file. */
+export function historyDirectory() {
+    return GLib.build_filenamev([GLib.get_user_state_dir(), HISTORY_DIRECTORY]);
+}
+
+export function historyPath() {
+    return GLib.build_filenamev([historyDirectory(), HISTORY_FILE]);
 }
 
 /**
@@ -128,7 +141,7 @@ function accountLabelFrom(text) {
         return '';
     try {
         const account = JSON.parse(text).oauthAccount;
-        const label = account?.organizationName || account?.displayName || account?.email;
+        const label = account?.organizationName || account?.displayName || account?.emailAddress;
         return typeof label === 'string' && label.trim() ? label.trim().slice(0, 40) : '';
     } catch (_error) {
         // Optional account metadata never blocks anything.

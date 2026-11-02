@@ -4,7 +4,7 @@
 
 ## Platform
 
-Native Linux desktop: Ubuntu 24.04 with GNOME Shell 46; declared compatible with 47 through 51.
+Native Linux desktop, GNOME Shell 46 through 51. Developed on GNOME Shell 46 and 50; 47-49 and 51 are declared but untested.
 
 ## Stack
 
@@ -29,12 +29,17 @@ Runs as a Claude Code statusline and a GNOME Shell extension. The statusline use
 ## Capabilities and Constraints
 
 - Single Claude Code account.
-- GNOME Shell 46 is the development and test target; 47 through 51 are declared but untested.
-- Two-line Claude Code skin with directory, branch, effort, profile, context tokens, 5-hour/7-day limits, reset countdowns, and extra-usage percentage.
-- Read-only OAuth credentials; expired credentials send the user back to `claude auth login`.
+- Developed on GNOME Shell 46 and 50; 47-49 and 51 are declared but untested.
+- Claude Code skin with directory, branch, effort, profile, context tokens, 5-hour/7-day limits, reset times, and extra-usage cost. Optional line breaks and wrap to terminal width; optional idle refresh interval (0-600 seconds, 0 disables).
+- Read-only OAuth credentials; expired access tokens prompt a Claude Code refresh when the refresh token is still valid, otherwise `claude auth login`.
 - Usage-limit resets are used through Claude Code: a header action opens `claude /limit-reset` in a terminal. The extension never calls the reset endpoint, which rejects clients other than Claude Code.
-- Seven days of local percentage-only history, visualized as a 24-hour mini chart.
-- No browser login, multi-profile switching, API Console billing, activity HUD, updater, localization, or telemetry.
+- Panel and popup bars colour at 70%/90% (or by projected usage, or one chosen colour) and carry a pace marker tick at the elapsed share of the 5-hour or 7-day window. Reset times can show time left, clock time or both; the panel can add a compact reset countdown.
+- Notifications: 75/90/95% toggles, custom thresholds, and a 5-hour window reset notice. Usage refreshes after resume from suspend and when the network returns.
+- Popup freshness: "Updated N min ago" while open, and "Refresh failed N times" from the second consecutive failure.
+- Thirty days of local history (percentages and the reset time of each window; 5-minute samples for 7 days, thinned to hourly beyond), charted at 5h / 24h / 7d / 30d scales in the popup. Preferences list the last 20 completed windows per metric, export JSON or CSV, and clear the history behind a confirmation.
+- Optional global shortcuts (open popup, refresh, open preferences; none set by default).
+- Optional Claude service status row (off by default): a public, unauthenticated GET of `https://status.claude.com/api/v2/status.json` at most every 5 minutes, only while enabled.
+- No browser login, multi-profile switching, API Console billing, activity HUD, updater, localization, telemetry (the opt-in status row is a status poll that carries nothing of the user's), auto-start session, or other providers (see [Codex Usage Monitor](https://github.com/TheophileDiot/Codex-Usage-Tracker-Linux)).
 
 ## Brand Commitments
 
