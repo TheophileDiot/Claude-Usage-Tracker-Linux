@@ -1,0 +1,14 @@
+metadata.json
+  h_a33a1e80933106 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c3cf6ad0fe128cf97d877c8ea9a39439976f05e7",
+  "prompts": {},
+  "humans": {
+    "h_a33a1e80933106": {
+      "author": "TheophileDiot <tdiot@bunkerity.com>"
+    }
+  }
+}
